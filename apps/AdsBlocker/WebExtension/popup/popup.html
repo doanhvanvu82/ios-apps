@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Thông báo nổi ở đầu màn hình: popup trên iPhone dài, lỗi ở cuối trang sẽ không ai thấy. -->
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+
+  <header>
+    <img src="../images/icon-48.png" alt="" width="32" height="32">
+    <div class="title">
+      <h1>AdsBlocker</h1>
+      <p id="host" class="note"><span class="spin"></span> Đang tải…</p>
+    </div>
+  </header>
+
+  <!-- Sau khi cập nhật app, Safari có thể còn giữ extension cũ đến khi được nạp lại. -->
+  <section id="reload-banner" class="card warn" hidden>
+    <p><b>Extension chưa sẵn sàng.</b> Nếu vừa cập nhật app, bấm <b>Tải lại extension</b>. Vẫn lỗi thì đóng hẳn Safari
+      (vuốt lên khỏi màn hình đa nhiệm) rồi mở lại, và tải lại các trang đang mở.</p>
+    <button id="reload-ext" class="primary">Tải lại extension</button>
+  </section>
+
+  <section class="card toggles">
+    <label class="toggle"><input type="checkbox" id="feature-ads" disabled>
+      <span><b>Chặn quảng cáo</b><small>Bộ lọc EasyList + ABPVN, popup/tab mới, lớp phủ, rule của bạn</small></span></label>
+    <label class="toggle"><input type="checkbox" id="feature-tracking" disabled>
+      <span><b>Chống theo dõi</b><small>EasyPrivacy, tham số theo dõi, link chuyển hướng, beacon, widget mạng xã hội</small></span></label>
+    <label class="toggle"><input type="checkbox" id="feature-youtube" disabled>
+      <span><b>Chặn quảng cáo YouTube</b><small>Bỏ quảng cáo video (trước/giữa video), tự tua nếu lọt, ẩn quảng cáo trong feed — chỉ trong Safari</small></span></label>
+    <p id="feature-status" class="status"></p>
+  </section>
+
+  <section class="stats">
+    <div><b id="popups">–</b><span>popup / tab mới</span></div>
+    <div><b id="overlays">–</b><span>lớp phủ bắt click</span></div>
+  </section>
+
+  <details id="log-box">
+    <summary>Nhật ký chặn</summary>
+    <ul id="log" class="list"></ul>
+  </details>
+
+  <section class="card">
+    <button id="pick" class="primary" disabled>Chọn quảng cáo để ẩn</button>
+    <p id="pick-status" class="status"></p>
+    <p class="note">Chạm vào quảng cáo trên trang, rồi chọn <b>Ẩn</b> hoặc <b>Ẩn bằng AI</b>.</p>
+  </section>
+
+  <section class="card">
+    <button id="scan" class="primary" disabled>Quét trang bằng AI</button>
+    <p id="scan-status" class="status"></p>
+
+    <div id="consent" hidden>
+      <p>Khi quét, <b>ảnh chụp màn hình</b> và <b>cấu trúc HTML (đã bỏ chữ)</b> của các khối nghi là quảng cáo
+        được gửi lên Google Gemini bằng API key của bạn. Trang nhạy cảm (ngân hàng, email) không bao giờ được gửi.</p>
+      <button id="consent-ok" class="primary">Đồng ý và quét</button>
+    </div>
+
+    <div id="scan-result" hidden>
+      <p id="scan-summary" class="note"></p>
+      <ul id="proposals" class="list"></ul>
+      <div class="row">
+        <button id="apply" class="primary">Áp dụng rule đã chọn</button>
+        <button id="dismiss">Bỏ qua</button>
+      </div>
+      <details id="rejected-box">
+        <summary>Đề xuất bị loại (<span id="rejected-count">0</span>)</summary>
+        <ul id="rejected" class="list"></ul>
+      </details>
+    </div>
+  </section>
+
+  <details id="diagnose-box">
+    <summary>Trang bị lỗi? Chẩn đoán</summary>
+    <label>Mô tả vấn đề
+      <textarea id="problem" rows="3" placeholder="Vd: ảnh truyện không hiện, nút đăng nhập không bấm được, video không chạy…"></textarea>
+    </label>
+    <div class="row">
+      <button id="diagnose-ai" class="primary">Chẩn đoán bằng AI</button>
+      <button id="diagnose-local">Chỉ xem dấu hiệu</button>
+    </div>
+    <p id="diagnose-status" class="status"></p>
+    <p id="diagnose-summary"></p>
+    <ul id="diagnose-fixes" class="list"></ul>
+    <details id="diagnose-all" hidden>
+      <summary>Mọi nghi phạm (<span id="diagnose-count">0</span>) — tự thử khi AI đoán sai</summary>
+      <ul id="diagnose-candidates" class="list"></ul>
+    </details>
+    <h3>Ngoại lệ của trang này</h3>
+    <ul id="exceptions" class="list"></ul>
+  </details>
+
+  <details id="privacy-box">
+    <summary>Theo dõi trên trang này <span id="privacy-badge" class="badge"></span></summary>
+    <p id="privacy-note" class="note"></p>
+    <div id="privacy-report"></div>
+    <div class="row">
+      <button id="privacy-refresh">Kiểm tra lại</button>
+      <button id="tracker-scan" class="primary">Quét theo dõi bằng AI</button>
+    </div>
+    <p id="tracker-status" class="status"></p>
+    <ul id="tracker-proposals" class="list"></ul>
+    <button id="tracker-apply" class="primary" hidden>Chặn các domain đã chọn</button>
+    <h3>Widget mạng xã hội được cho phép trên trang này</h3>
+    <ul id="widgets" class="list"></ul>
+  </details>
+
+  <details id="rules-box">
+    <summary>Rule đã lưu (<span id="rule-count">0</span>)</summary>
+    <div class="group-head"><h3>Chỉ trang này</h3><button id="clear-site" class="small danger" hidden>Xoá toàn bộ</button></div>
+    <ul id="rules" class="list"></ul>
+    <div class="group-head"><h3>Mọi trang</h3><button id="clear-global" class="small danger" hidden>Xoá toàn bộ</button></div>
+    <ul id="global-rules" class="list"></ul>
+    <p class="note">Chỉ rule có dấu hiệu quảng cáo rõ (vd. <code>a.ads-banner</code>, <code>iframe[src*="adnet.com"]</code>)
+      mới chuyển sang "Mọi trang" được; tên do trang tự đặt dễ ẩn nhầm ở trang khác.</p>
+  </details>
+
+  <details id="share-box">
+    <summary>Dùng chung rule với tên miền khác</summary>
+    <p id="share-info" class="note"></p>
+    <div id="share-suggest"></div>
+    <label>Chọn tên miền đã có rule
+      <select id="share-target"></select>
+    </label>
+    <div class="row">
+      <button id="share-link">Dùng chung</button>
+      <button id="share-unlink">Bỏ dùng chung</button>
+    </div>
+    <p id="share-status" class="status"></p>
+  </details>
+
+  <details id="settings">
+    <summary>Cài đặt AI <span id="ai-badge" class="badge"></span></summary>
+    <p id="ai-summary" class="note"></p>
+
+    <label>Gemini API key
+      <input type="password" id="api-key" autocomplete="off" autocapitalize="off" spellcheck="false">
+    </label>
+    <div class="row">
+      <button id="save-key">Lưu key</button>
+      <button id="clear-key">Xoá key</button>
+    </div>
+    <p id="key-status" class="status"></p>
+
+    <label>Model
+      <select id="model"></select>
+    </label>
+    <button id="load-models">Tải danh sách model</button>
+    <p id="model-status" class="status"></p>
+
+    <label>Trang nhạy cảm — không bao giờ gửi lên AI (mỗi dòng một domain)
+      <textarea id="sensitive" rows="4" autocapitalize="off" spellcheck="false"></textarea>
+    </label>
+    <button id="save-sensitive">Lưu danh sách</button>
+    <p id="sensitive-status" class="status"></p>
+  </details>
+
+  <p class="footer"><button id="reload-ext-footer" class="small">Tải lại extension</button></p>
+
+  <script src="../rules/validate.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

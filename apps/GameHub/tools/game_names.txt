@@ -1,0 +1,19 @@
+# Tên thư mục game gốc → tên thư mục output (ngắn gọn, dễ đọc trong app).
+# Dùng bởi tools/build_all.sh và các script khác.
+#
+# Format:  <tên game gốc>|<tên output>
+#
+# Nguyên tắc: bỏ hậu tố site (GVNVH18…), bỏ phiên bản (-0.26.6-pc),
+# rút gọn phần mở đầu dài. Nếu không có trong bảng → dùng chính tên thư mục.
+
+Iinari! Saimin Kanojo (GVNVH18)|Inari
+Little Sister Netori_PC-CM|Netori
+Hizashi no Naka no Riaru (GVNVH18)|Riaru
+RE117849|LiveIdol
+Goodbye_Eternity-v0.13.0|GoodbyeEternity
+Buchicome ☆ High kick!|Buchicome
+Professor_Wakayamas_NTR_Classroom-Demo|Wakayama
+Agent17-0.26.6-pc|Agent17
+WhispersofDesire-0.1.8public-VN (GVNVH18)|WhispersofDesire
+Immoral-Bathhouse-v0.0.41|Immoral-Bathhouse
+Ride Me, Taxi Driver v2.14|RideMe

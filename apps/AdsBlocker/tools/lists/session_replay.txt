@@ -1,0 +1,18 @@
+# Dịch vụ ghi lại phiên (session replay): ghi từng cú chạm, cuộn, nội dung gõ để phát lại như video.
+# Chặn khi là bên thứ ba (vào thẳng trang chủ của họ vẫn được).
+hotjar.com
+hotjar.io
+clarity.ms
+fullstory.com
+logrocket.io
+lr-ingest.io
+lr-ingest.com
+mouseflow.com
+smartlook.com
+smartlook.cloud
+inspectlet.com
+luckyorange.com
+luckyorange.net
+crazyegg.com
+quantummetric.com
+contentsquare.net

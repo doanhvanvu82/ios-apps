@@ -1,0 +1,5 @@
+# 1. Xem tool sẽ xếp vào nhóm nào (an toàn, không di chuyển)
+./tools/phan_loai.sh
+
+# 2. Thực thi
+./tools/phan_loai.sh --apply

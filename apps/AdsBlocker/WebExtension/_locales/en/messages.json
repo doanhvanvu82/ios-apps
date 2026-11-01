@@ -1,0 +1,8 @@
+{
+  "extension_name": {
+    "message": "AdsBlocker"
+  },
+  "extension_description": {
+    "message": "Blocks ads, pop-under tabs and click-hijacking overlays; scan with Gemini to learn new rules."
+  }
+}

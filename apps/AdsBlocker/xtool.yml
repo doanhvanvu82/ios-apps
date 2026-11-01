@@ -1,0 +1,17 @@
+version: 1
+bundleID: vn.vudv.adsblocker
+infoPath: Info.plist
+product: AdsBlocker
+extensions:
+  - product: AdsBlockerExtension
+    infoPath: Extension-Info.plist
+    # Safari tìm manifest.json ở gốc appex; mỗi mục được copy vào gốc theo tên cuối.
+    resources:
+      - WebExtension/manifest.json
+      - WebExtension/background.js
+      - WebExtension/content
+      - WebExtension/popup
+      - WebExtension/rules
+      - WebExtension/filters
+      - WebExtension/images
+      - WebExtension/_locales

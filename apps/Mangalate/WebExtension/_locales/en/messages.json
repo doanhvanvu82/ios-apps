@@ -1,0 +1,8 @@
+{
+  "extension_name": {
+    "message": "Mangalate"
+  },
+  "extension_description": {
+    "message": "Translate manga/comic chapters into Vietnamese: OCR on device, send only text to Gemini, overlay the translation on speech bubbles."
+  }
+}

@@ -1,0 +1,7 @@
+# Dịch vụ lấy dấu vân tay trình duyệt (nhận diện thiết bị không cần cookie).
+# Không đưa dịch vụ chống gian lận ngân hàng (ThreatMetrix online-metrix.net, iovation iesnare.com): chặn có thể làm hỏng đăng nhập.
+fpjs.io
+fpcdn.io
+openfpcdn.io
+fingerprint.com
+fingerprintjs.com

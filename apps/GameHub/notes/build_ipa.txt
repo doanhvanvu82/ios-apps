@@ -1,0 +1,3 @@
+cd ~/Documents/Code/ios/apps/GameHub
+./build.sh          # incremental ~3s
+./build.sh clean    # từ đầu ~2.5 phút

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="../images/icon-48.png" alt="" width="32" height="32">
+    <div>
+      <h1>Mangalate</h1>
+      <p class="note">OCR trên máy · chỉ text gửi Gemini</p>
+    </div>
+  </header>
+
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+
+  <section class="card">
+    <label for="api-key">Gemini API key</label>
+    <input id="api-key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="AIza…">
+    <div class="row">
+      <button id="save-key" class="primary">Lưu key</button>
+      <button id="load-models">Tải danh sách model</button>
+    </div>
+    <p id="key-status" class="note"></p>
+    <label for="model">Model</label>
+    <select id="model"></select>
+    <p class="note">Key chỉ lưu trong Keychain của máy. Tạo key miễn phí tại aistudio.google.com.</p>
+  </section>
+
+  <section class="card">
+    <label>Trang được dịch</label>
+    <p id="site-current" class="note">Đang xem: —</p>
+    <div class="row">
+      <button id="add-site" class="primary">Thêm trang này</button>
+    </div>
+    <ul id="site-list" class="sites"></ul>
+    <p class="note">Chỉ các trang trong danh sách mới hiện nút <b>Dịch</b>. Trang khác (kể cả trang tiếng Việt) không bị làm phiền.</p>
+  </section>
+
+  <section class="card">
+    <button id="translate" class="primary">Dịch trang này</button>
+    <p class="note">Hoặc bấm nút <b>Dịch</b> nổi ở góc phải dưới trang truyện. Lần đầu sẽ hỏi xác nhận.</p>
+    <p class="note">Ảnh truyện được đọc trên máy; chỉ phần chữ OCR được gửi lên Google Gemini.</p>
+    <button id="clear-cache">Xoá cache bản dịch</button>
+    <p class="note">Xoá bản dịch đã lưu của mọi chapter để dịch lại từ đầu (dùng khi bản dịch cũ bị sai/thiếu).</p>
+  </section>
+
+  <section class="card">
+    <details id="diag-card">
+      <summary>Chẩn đoán lần dịch gần nhất</summary>
+      <pre id="diag">Chưa có lần dịch nào.</pre>
+    </details>
+  </section>
+
+  <script src="popup.js"></script>
+</body>
+</html>

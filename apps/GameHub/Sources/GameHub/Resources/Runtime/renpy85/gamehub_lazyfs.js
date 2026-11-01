@@ -1,0 +1,1 @@
+../renpy/gamehub_lazyfs.js

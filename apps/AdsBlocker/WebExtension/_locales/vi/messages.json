@@ -1,0 +1,8 @@
+{
+  "extension_name": {
+    "message": "AdsBlocker"
+  },
+  "extension_description": {
+    "message": "Chặn quảng cáo, popup mở tab mới và lớp phủ bắt click; quét bằng Gemini để tự học rule mới."
+  }
+}

@@ -1,0 +1,155 @@
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 12px;
+  min-width: 300px;
+  font: 14px/1.45 -apple-system, "Helvetica Neue", sans-serif;
+  background: #f6f7fb;
+  color: #111;
+}
+
+header {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.note {
+  margin: 4px 0 0;
+  color: #5b6472;
+  font-size: 12px;
+}
+
+.card {
+  margin-bottom: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .08);
+}
+
+label {
+  display: block;
+  margin: 8px 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+}
+
+input,
+select {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #d6dae2;
+  border-radius: 9px;
+  background: #fff;
+  font: inherit;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+button {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #e9ecf3;
+  color: #111;
+  font: 600 14px -apple-system, "Helvetica Neue", sans-serif;
+}
+
+button.primary {
+  background: #4f46e5;
+  color: #fff;
+}
+
+button:disabled {
+  opacity: .5;
+}
+
+#toast {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin-bottom: 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: #111827;
+  color: #fff;
+  font-size: 13px;
+}
+
+#toast.err {
+  background: #b91c1c;
+}
+
+#toast[hidden] {
+  display: none;
+}
+
+summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+#diag {
+  margin: 10px 0 0;
+  max-height: 260px;
+  padding: 9px 10px;
+  overflow: auto;
+  border-radius: 9px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font: 11px/1.5 ui-monospace, "SF Mono", Menlo, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.sites {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sites li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #f3f4f8;
+  font-size: 13px;
+}
+
+.sites li + li {
+  margin-top: 6px;
+}
+
+.sites button {
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 8px;
+  background: #e5e7eb;
+  font: 600 12px -apple-system, "Helvetica Neue", sans-serif;
+}

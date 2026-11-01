@@ -1,0 +1,22 @@
+{
+  "_comment": "Widget mạng xã hội nhúng trong trang (nút Like, bài đăng nhúng): tải là bị mạng xã hội theo dõi dù không bấm. Chặn khi là bên thứ ba; content/privacy.js thay bằng ô 'Chạm để tải'.",
+  "domains": [
+    "connect.facebook.net",
+    "platform.twitter.com",
+    "syndication.twitter.com",
+    "platform.linkedin.com",
+    "assets.pinterest.com"
+  ],
+  "block": [
+    { "urlFilter": "||connect.facebook.net^", "resourceTypes": ["script", "sub_frame"] },
+    { "urlFilter": "||facebook.com/plugins/", "resourceTypes": ["sub_frame", "script"] },
+    { "urlFilter": "||platform.twitter.com^", "resourceTypes": ["script", "sub_frame"] },
+    { "urlFilter": "||syndication.twitter.com^", "resourceTypes": ["script", "sub_frame", "xmlhttprequest"] },
+    { "urlFilter": "||instagram.com/embed.js", "resourceTypes": ["script"] },
+    { "urlFilter": "||instagram.com/p/*/embed", "resourceTypes": ["sub_frame"] },
+    { "urlFilter": "||instagram.com/reel/*/embed", "resourceTypes": ["sub_frame"] },
+    { "urlFilter": "||tiktok.com/embed", "resourceTypes": ["script", "sub_frame"] },
+    { "urlFilter": "||platform.linkedin.com^", "resourceTypes": ["script", "sub_frame"] },
+    { "urlFilter": "||assets.pinterest.com/js/pinit", "resourceTypes": ["script"] }
+  ]
+}

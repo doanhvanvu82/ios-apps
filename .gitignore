@@ -1,0 +1,34 @@
+# --- Build output (mỗi app tự build lại) ---
+.build/
+**/.build/
+/xtool/
+**/xtool/
+*.ipa
+Package.resolved
+__pycache__/
+*.pyc
+
+# --- Dữ liệu build game: 21 GB, tự sinh bằng apps/GameHub/tools/build_all.sh ---
+apps/GameHub/workspace/
+
+# --- Công cụ nặng, tải riêng (xem README) ---
+toolkit/xtool.AppImage
+toolkit/xtool-src/
+
+# --- Bộ lọc quảng cáo sinh lúc build (apps/AdsBlocker/tools/build-filters.mjs) ---
+apps/AdsBlocker/WebExtension/filters/
+apps/AdsBlocker/.filters-cache/
+
+# --- Server LAN: file tạm trên máy này ---
+.state/
+sidestore/
+
+# --- Nguồn đã publish: chỉ commit source.json; IPA/icon nằm ở GitHub Releases ---
+source/*.ipa
+source/*.png
+
+# --- OS ---
+.DS_Store
+
+# IDE build-server config (đường dẫn tuyệt đối trên máy này)
+**/.bsp/

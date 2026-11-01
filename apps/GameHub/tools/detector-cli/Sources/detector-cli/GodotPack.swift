@@ -1,0 +1,1 @@
+../../../../Sources/GameHub/GodotPack.swift

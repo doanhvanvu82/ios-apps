@@ -1,0 +1,40 @@
+cd ~/Documents/Code/ios/apps/GameHub
+
+# 1. Phân loại (thả game mới vào ~/Documents/Game/ trước)
+./tools/phan_loai.sh            # xem game nào vào nhóm nào
+./tools/phan_loai.sh --apply    # di chuyển thật
+
+# 2. Build lại game trong 2-CanBuildLai → bản web ở 2-DaBuildLai
+./tools/build_all.sh                 # chỉ build game CHƯA có trong 2-DaBuildLai
+./tools/build_all.sh --force         # build lại tất cả, kể cả game đã build
+./tools/build_all.sh --only <tên>    # build (lại) game có tên chứa <tên>
+# Tên thư mục bản build lấy từ tools/game_names.txt (không có thì giữ tên gốc)
+
+# Build NHIỀU game song song (nhanh hơn: 2 game cùng lúc, dựng project xếp hàng từng game):
+./tools/build_parallel.sh                      # game chưa có bản web, 2 game cùng lúc
+./tools/build_parallel.sh -j 3                 # 3 game cùng lúc (cần ~4 GB RAM trống mỗi game)
+./tools/build_parallel.sh "Shame Chain" HousekeepingNTR   # chỉ các game này, đúng thứ tự
+# Dòng "⏱ mm:ss <bước>" trong log /tmp/build-all/<tên>.run.log là bước đang chạy.
+# Khi build_all.sh chạy tay trong terminal thì tự hiện tiến trình + thời gian ở dòng "⏱".
+
+# Biến môi trường (đặt trước lệnh build):
+#   GAMEHUB_KEEP_LIBRARY=1   giữ Library/ khi build lỗi (gỡ lỗi: lần sau chỉ tốn vài phút thay vì import lại)
+#   GAMEHUB_CODE_OPT=BuildTimes   biên dịch C++ nhanh hơn nhiều, đổi lại game chạy chậm hơn (mặc định RuntimeSpeed)
+#   GAMEHUB_IL2CPP_SIZE=1    IL2CPP "Faster (smaller) builds"
+#   GAMEHUB_STRIP_LEVEL=High cắt mã không dùng mạnh hơn (tự bật khi gặp lỗi "method reference we cannot resolve")
+
+# 3. Copy thư mục trong ~/Documents/Game/2-DaBuildLai/ vào iPhone
+#    (Files → GameHub → Imports)
+
+# --- Build riêng từng loại (build_all.sh tự gọi các lệnh này) ---
+# Unity Mono:
+./tools/unity_extract.sh "<thư-mục-game>" [thư-mục-project]   # AssetRipper dựng project
+./tools/unity_build_webgl.sh <thư-mục-project> [output]        # Unity Editor build WebGL
+# Ren'Py khác 8.3 (Ren'Py 8.3 thì app chơi thẳng, không cần build):
+./tools/renpy_web_build.sh "<thư-mục-game>" [output]
+# Godot trong installer NSIS:
+./tools/nsis_extract.sh "<thư-mục-hoặc-exe>" [output]
+./tools/godot_web_export.sh "<thư-mục-đã-giải-nén>" [output]
+
+# Không build được: Unity IL2CPP (trừ khi còn bản Mono gốc), GameMaker,
+# Unreal, Pixel Game Maker MV, engine .tad — xem nhóm 3-ChuaChoiDuoc.

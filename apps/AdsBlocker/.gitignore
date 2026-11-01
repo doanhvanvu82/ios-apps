@@ -1,0 +1,9 @@
+.DS_Store
+/.build
+/.swiftpm
+/xtool
+*.ipa
+node_modules/
+# Sinh lúc build từ bộ lọc tải về (tools/build-filters.mjs).
+/.filters-cache
+/WebExtension/filters
