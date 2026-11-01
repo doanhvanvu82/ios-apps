@@ -13,7 +13,7 @@ SwiftPM + xtool trên Linux, cài lên iPhone qua SideStore (Apple ID miễn ph�
 │   ├── patch_icon.sh <ipa> <png>   — chèn icon (resize từ 1024×1024) vào IPA
 │   ├── sidestore_source.py         — gộp apps/*/xtool/*.ipa thành sidestore/source.json
 │   ├── dev_server.py, serve_sidestore.sh [stop] — server LAN port 8765 (+ POST /clipboard; POST /log → .state/iphone_log.txt)
-│   ├── publish_github.sh <app>     — sinh source.json trỏ GitHub Releases + push + upload IPA (URL cố định cho SideStore)
+│   ├── publish_github.sh [--dry-run] — sinh source.json trỏ GitHub Releases + push + upload IPA (URL cố định cho SideStore)
 │   ├── pull_app_logs.sh <bundleID> — iPhone cắm USB: chép Documents/Logs của app → .state/logs/<bundleID>/ (cần ifuse)
 │   ├── xtool.AppImage              — xtool 1.22.2
 │   └── xtool-src/                  — clone mã nguồn xtool để tra cứu (PackLib/ = cách đóng gói)
