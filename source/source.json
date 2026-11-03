@@ -12,7 +12,7 @@
       "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker.png",
       "tintColor": "#738CFF",
       "version": "1.68",
-      "versionDate": "2026-11-01",
+      "versionDate": "2026-11-03",
       "versionDescription": "Build 68",
       "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.68.ipa",
       "size": 1982836,
@@ -20,7 +20,7 @@
         {
           "version": "1.68",
           "buildVersion": "68",
-          "date": "2026-11-01T14:15:53+00:00",
+          "date": "2026-11-03T22:19:35+00:00",
           "localizedDescription": "Build 68",
           "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.68.ipa",
           "size": 1982836
@@ -40,7 +40,7 @@
       "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub.png",
       "tintColor": "#738CFF",
       "version": "1.122",
-      "versionDate": "2026-11-01",
+      "versionDate": "2026-11-03",
       "versionDescription": "Build 122",
       "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub-1.122.ipa",
       "size": 74752162,
@@ -48,7 +48,7 @@
         {
           "version": "1.122",
           "buildVersion": "122",
-          "date": "2026-11-01T14:15:53+00:00",
+          "date": "2026-11-03T22:19:35+00:00",
           "localizedDescription": "Build 122",
           "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub-1.122.ipa",
           "size": 74752162
@@ -67,19 +67,19 @@
       "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
       "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate.png",
       "tintColor": "#738CFF",
-      "version": "1.58",
-      "versionDate": "2026-11-01",
-      "versionDescription": "Build 58",
-      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate-1.58.ipa",
-      "size": 278638,
+      "version": "1.66",
+      "versionDate": "2026-11-03",
+      "versionDescription": "Build 66",
+      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate-1.66.ipa",
+      "size": 283099,
       "versions": [
         {
-          "version": "1.58",
-          "buildVersion": "58",
-          "date": "2026-11-01T14:15:53+00:00",
-          "localizedDescription": "Build 58",
-          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate-1.58.ipa",
-          "size": 278638
+          "version": "1.66",
+          "buildVersion": "66",
+          "date": "2026-11-03T22:19:35+00:00",
+          "localizedDescription": "Build 66",
+          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate-1.66.ipa",
+          "size": 283099
         }
       ],
       "appPermissions": {
