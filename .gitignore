@@ -32,3 +32,6 @@ source/*.png
 
 # IDE build-server config (đường dẫn tuyệt đối trên máy này)
 **/.bsp/
+
+# Biến môi trường (chứa API key) — không bao giờ commit
+.env

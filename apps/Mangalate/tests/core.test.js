@@ -444,8 +444,7 @@ test("layoutTextAreas: một bong bóng → vùng chữ neo tâm chữ gốc, n�
   assert.ok(Math.abs(area.h - 0.17) < 1e-9);
 });
 
-test("fitTextAreaToPolygon cắt vùng chữ theo cung hẹp nhất của bong bóng", () => {
-  // Bong bóng thoi: hẹp dần về hai đầu; vùng chữ hình chữ nhật rộng bằng phần giữa sẽ tràn ra.
+test("fitTextAreaToPolygon chọn khung rộng nhất nằm trong bong bóng, tâm lệch tối đa 2%", () => {
   const shape = [0.4, 0.2, 0.4, 0.5, 0.4, 0.8, 0.6, 0.8, 0.6, 0.65, 0.6, 0.5, 0.6, 0.2];
   const blocks = [{
     imageIndex: 0,
@@ -455,9 +454,13 @@ test("fitTextAreaToPolygon cắt vùng chữ theo cung hẹp nhất của bong b
   }];
   core.layoutTextAreas(blocks);
   const area = blocks[0].textArea;
+  // Nằm gọn trong đa giác.
   assert.ok(area.x > 0.4 + 1e-6);
   assert.ok(area.x + area.w < 0.6 - 1e-6);
-  assert.ok(Math.abs(area.x + area.w / 2 - 0.5) < 1e-9);
+  // Được dời khung để lấy bề rộng, nhưng không rời xa chỗ chữ gốc.
+  assert.ok(Math.abs(area.x + area.w / 2 - 0.5) <= 0.02 + 1e-9);
+  // Không bị cắt còn dải hẹp: rộng hơn hẳn vùng chữ gốc.
+  assert.ok(area.w > 0.12);
 });
 
 test("layoutTextAreas: không chia vùng giữa block của hai ảnh khác nhau", () => {
@@ -473,6 +476,43 @@ test("layoutTextAreas: không chia vùng giữa block của hai ảnh khác nhau
   const same = blocks.map((block) => ({ ...block, imageIndex: 0 }));
   core.layoutTextAreas(same);
   assert.ok(Math.abs(same[0].textArea.x + same[0].textArea.w - 0.455) < 1e-9);
+});
+
+test("layoutTextAreas: cột chữ dọc được nới rộng để chữ ngang đọc được", () => {
+  const box = { x: 0.64, y: 0.15, w: 0.025, h: 0.19 };
+  const blocks = [{ imageIndex: 0, box: { ...box }, textBox: { ...box }, vertical: true }];
+  core.layoutTextAreas(blocks);
+  const area = blocks[0].textArea;
+  // Nới đủ rộng để câu tiếng Việt xuống 2–3 dòng, nhưng KHÔNG được tràn ra ngoài bong bóng:
+  // hệ số cũ (5×) làm vùng chữ phủ ngang tranh, đè lên hình.
+  assert.ok(area.w > box.w * 2);
+  assert.ok(area.w <= box.w * 2.4 + 1e-9);
+  // Vẫn neo tâm cột gốc.
+  assert.ok(Math.abs(area.x + area.w / 2 - (box.x + box.w / 2)) < 1e-9);
+});
+
+test("layoutTextAreas: hai vùng chữ nới ra không chồng nhau", () => {
+  const blocks = [
+    { imageIndex: 0, box: { x: 0.2, y: 0.2, w: 0.02, h: 0.2 }, textBox: { x: 0.2, y: 0.2, w: 0.02, h: 0.2 }, vertical: true },
+    { imageIndex: 0, box: { x: 0.26, y: 0.2, w: 0.02, h: 0.2 }, textBox: { x: 0.26, y: 0.2, w: 0.02, h: 0.2 }, vertical: true },
+  ];
+  core.layoutTextAreas(blocks);
+  assert.equal(intersects(blocks[0].textArea, blocks[1].textArea), false);
+});
+
+test("groupLines gộp các cột chữ dọc so le trong cùng bong bóng", () => {
+  // Cột sau bắt đầu từ giữa cột trước: chồng dọc chỉ ~40% nên trước đây tách thành 2 block.
+  const column = (x, y) => ({
+    text: "chữ",
+    box: { x, y, w: 0.02, h: 0.2 },
+    confidence: 0.9,
+    bg: "#ffffff",
+    fill: 0.9,
+    enclose: 1,
+  });
+  const blocks = core.groupLines([column(0.4, 0.3), column(0.43, 0.38)], 1000, 1000);
+  assert.equal(blocks.length, 1);
+  assert.equal(blocks[0].vertical, true);
 });
 
 test("groupLines mở rộng đường bao cho phủ kín hộp chữ thay vì bỏ hẳn", () => {

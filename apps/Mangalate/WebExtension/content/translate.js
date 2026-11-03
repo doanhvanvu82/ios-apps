@@ -844,7 +844,9 @@
     setFrame(element, block.textArea || block.box, rect);
     element.hidden = false;
     if (block.backdrop) {
-      setFrame(block.backdrop, block.box, rect);
+      // Không có đa giác thì `box` có thể phình gấp nhiều lần vùng chữ (OCR loang) — nền phải
+      // kẹp quanh chữ, nếu không sẽ là một khối đặc che tranh.
+      setFrame(block.backdrop, core.backdropFrame(block), rect);
       block.backdrop.hidden = false;
     }
     fitText(element, block, rect);
@@ -868,7 +870,10 @@
     const maxHeight = element.clientHeight - 4;
     if (maxWidth < 4 || maxHeight < 4) return;
     const text = block.textBox || block.box;
-    const lineHeight = (text.h * rect.height) / Math.max(1, Number(block.lines) || 1);
+    // Cột chữ dọc: "dòng" chạy theo trục ngang (mỗi cột là một dòng OCR), nên cỡ chữ gốc lấy từ
+    // bề rộng chia số cột; dùng chiều cao sẽ ra cỡ khổng lồ cho cột cao vài trăm pixel.
+    const lineExtent = block.vertical ? text.w * rect.width : text.h * rect.height;
+    const lineHeight = lineExtent / Math.max(1, Number(block.lines) || 1);
     let size = Math.max(7, Math.min(28, Math.round(lineHeight / 1.15)));
     element.style.fontSize = `${size}px`;
     element.style.overflowWrap = "";
