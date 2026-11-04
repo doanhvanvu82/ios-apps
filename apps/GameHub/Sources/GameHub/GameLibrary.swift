@@ -27,6 +27,12 @@ final class GameLibrary: ObservableObject {
         return docs.appendingPathComponent("GameHub", isDirectory: true)
     }
 
+    /// Thư mục game mặc định — nằm trong container của app nên không cần
+    /// security scope và người dùng chép game vào qua Files app.
+    static var defaultGamesRoot: URL {
+        hubRoot.appendingPathComponent("Games", isDirectory: true)
+    }
+
     /// Thư mục game người dùng đã chọn (bookmark). `nil` = chưa chọn.
     @Published private(set) var gamesRoot: URL?
 
@@ -82,6 +88,15 @@ final class GameLibrary: ObservableObject {
             } catch {
                 print("[GameLibrary] Không khôi phục được bookmark: \(error)")
             }
+        }
+        // Chưa có bookmark → dùng thư mục mặc định trong container app.
+        // Picker chọn folder của iOS 27 đang trả rỗng với app này, nên thư mục
+        // mặc định là đường chính; người dùng chép game vào qua Files app.
+        if gamesRoot == nil {
+            let defaultRoot = Self.defaultGamesRoot
+            try? FileManager.default.createDirectory(at: defaultRoot, withIntermediateDirectories: true)
+            gamesRoot = defaultRoot
+            AppLog.info("Dùng thư mục mặc định: \(defaultRoot.path)")
         }
         if gamesRoot != nil, metadata.cachedBuild != AppVersion.build {
             AppLog.info("App vừa cập nhật (build \(AppVersion.build)) → quét lại thư viện")

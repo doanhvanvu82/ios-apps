@@ -240,7 +240,7 @@ struct LibraryView: View {
             if library.gamesRoot != nil {
                 Text("Không tìm thấy game nào")
                     .font(.headline)
-                Text("Thêm game vào thư mục \"\(library.gamesRoot?.lastPathComponent ?? "")\" rồi quét lại.")
+                Text("Chép game vào \"On My iPhone → Game Hub → GameHub/\(library.gamesRoot?.lastPathComponent ?? "Games")\" trong Files rồi quét lại.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
