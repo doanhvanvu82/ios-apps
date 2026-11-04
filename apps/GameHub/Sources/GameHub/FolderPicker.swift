@@ -2,11 +2,9 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
-/// Trình chọn **một tệp bất kỳ** ở chế độ mở (`asCopy: false`) để lấy security scope.
+/// Trình chọn thư mục ở chế độ mở (`asCopy: false`), trả URL có security scope.
 ///
-/// Chọn folder bằng picker đang hỏng trên iOS 27.2 với app này (trả rỗng,
-/// `Could not resolve bookmark`), nên người dùng chọn một tệp nằm trong thư mục
-/// game; `GameLibrary.handleFolderPick` lấy thư mục cha của tệp đó.
+/// Không dùng `.fileImporter` của SwiftUI: nó mở picker ở chế độ import.
 struct FolderPicker: UIViewControllerRepresentable {
     let onPick: (Result<[URL], Error>) -> Void
 
@@ -15,7 +13,7 @@ struct FolderPicker: UIViewControllerRepresentable {
     }
 
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.item], asCopy: false)
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder], asCopy: false)
         picker.allowsMultipleSelection = false
         picker.delegate = context.coordinator
         return picker

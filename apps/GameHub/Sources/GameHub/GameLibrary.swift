@@ -113,24 +113,15 @@ final class GameLibrary: ObservableObject {
     }
 
     /// Kết quả từ `FolderPicker` chọn thư mục game (màn chính + Cài đặt).
-    ///
-    /// Picker chọn folder hỏng trên iOS 27.2 với app này nên người dùng chọn một
-    /// tệp nằm trong thư mục game; app dùng thư mục chứa tệp đó.
     func handleFolderPick(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
-            guard let picked = urls.first else {
+            guard let url = urls.first else {
                 AppLog.warn("Picker trả về danh sách rỗng")
                 statusMessage = "Không nhận được thư mục nào."
                 return
             }
-            let scoped = picked.startAccessingSecurityScopedResource()
-            let isDirectory = (try? picked.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
-            if scoped { picked.stopAccessingSecurityScopedResource() }
-
-            let root = (isDirectory || picked.hasDirectoryPath) ? picked : picked.deletingLastPathComponent()
-            AppLog.info("Picker trả về: \(picked.lastPathComponent) → thư mục \(root.lastPathComponent)")
-            setGamesRoot(root)
+            setGamesRoot(url)
         case .failure(let error):
             if (error as? CocoaError)?.code == .userCancelled { return }
             AppLog.error("Lỗi chọn thư mục: \(error)")

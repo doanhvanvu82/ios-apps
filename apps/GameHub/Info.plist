@@ -30,9 +30,9 @@
 		</dict>
 	</dict>
 	<key>CFBundleShortVersionString</key>
-	<string>2.26</string>
+	<string>2.27</string>
 	<key>CFBundleVersion</key>
-	<string>126</string>
+	<string>127</string>
 	<key>GameHubDevServer</key>
 	<string>http://192.168.1.212:8765</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
@@ -49,8 +49,6 @@
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
 	</dict>
-	<key>UIFileSharingEnabled</key>
-	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIRequiresFullScreen</key>

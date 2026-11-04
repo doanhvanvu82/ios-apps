@@ -126,7 +126,7 @@ struct SettingsView: View {
                     Button {
                         showingFolderPicker = true
                     } label: {
-                        Label(library.gamesRoot == nil ? "Chọn tệp trong thư mục…" : "Đổi thư mục…",
+                        Label(library.gamesRoot == nil ? "Chọn thư mục…" : "Đổi thư mục…",
                               systemImage: "folder.badge.gearshape")
                     }
                     Button {
