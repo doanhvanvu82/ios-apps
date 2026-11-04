@@ -30,9 +30,9 @@
 		</dict>
 	</dict>
 	<key>CFBundleShortVersionString</key>
-	<string>2.28</string>
+	<string>2.29</string>
 	<key>CFBundleVersion</key>
-	<string>128</string>
+	<string>129</string>
 	<key>GameHubDevServer</key>
 	<string>http://192.168.1.212:8765</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>

@@ -35,3 +35,6 @@ source/*.png
 
 # Biến môi trường (chứa API key) — không bao giờ commit
 .env
+
+# Xcode XIP dùng để build SDK (quá lớn để commit)
+*.xip
