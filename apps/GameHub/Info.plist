@@ -30,9 +30,9 @@
 		</dict>
 	</dict>
 	<key>CFBundleShortVersionString</key>
-	<string>1.124</string>
+	<string>1.125</string>
 	<key>CFBundleVersion</key>
-	<string>124</string>
+	<string>125</string>
 	<key>GameHubDevServer</key>
 	<string>http://192.168.1.212:8765</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
@@ -44,6 +44,11 @@
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Gửi log về máy tính trong mạng nhà để chẩn đoán lỗi.</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+	</dict>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>UILaunchScreen</key>
