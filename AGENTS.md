@@ -100,3 +100,8 @@ Build: `apps/<App>/build.sh` (lần đầu hoặc sau khi di chuyển thư mục
 - Safari Web Extension: `storage.session` trên iOS báo "Exceeded storage quota" dù chỉ vài KB → dùng `storage.local`.
 - Safari Web Extension: Safari đọc background/content script không có charset thành Latin-1 → file JS có chữ không phải ASCII
   phải bắt đầu bằng BOM UTF-8 (xem `apps/AdsBlocker/tests/encoding.test.js`).
+- **iOS 27.2 + app cài sideload: chọn thư mục/tệp ngoài container luôn trả rỗng.** `UIDocumentPickerViewController` (mọi
+  biến thể API, kể cả chọn file) log `didPickDocumentURLs … empty array` + `Could not resolve bookmark. Cocoa 257`; app
+  App Store (a-Shell) và app cài bằng Xcode thì chọn bình thường (xem seedds/nxnative#1148). Không sửa được bằng code hay
+  SDK/Info.plist — dùng thư mục mặc định trong container (`Documents/GameHub/Games`, xem `apps/GameHub`); giữ bản gốc dữ
+  liệu người dùng ở ngoài app và copy vào container thay vì move.

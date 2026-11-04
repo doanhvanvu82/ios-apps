@@ -5,6 +5,8 @@ import UniformTypeIdentifiers
 /// Trình chọn thư mục ở chế độ mở (`asCopy: false`), trả URL có security scope.
 ///
 /// Không dùng `.fileImporter` của SwiftUI: nó mở picker ở chế độ import.
+/// Lưu ý: trên iOS 27.2 iOS trả selection rỗng cho app cài sideload (lỗi hệ
+/// thống, không phải code) — vì vậy app còn dùng thư mục mặc định trong container.
 struct FolderPicker: UIViewControllerRepresentable {
     let onPick: (Result<[URL], Error>) -> Void
 
@@ -13,9 +15,7 @@ struct FolderPicker: UIViewControllerRepresentable {
     }
 
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        // Initializer legacy: trên iOS 27.2 đường UTType mới trả về selection rỗng
-        // (bookmark không resolve được) với app này; thử đường cũ.
-        let picker = UIDocumentPickerViewController(documentTypes: ["public.folder"], in: .open)
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder], asCopy: false)
         picker.allowsMultipleSelection = false
         picker.delegate = context.coordinator
         return picker
