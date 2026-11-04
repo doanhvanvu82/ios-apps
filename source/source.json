@@ -20,7 +20,7 @@
         {
           "version": "1.68",
           "buildVersion": "68",
-          "date": "2026-11-04T04:39:39+00:00",
+          "date": "2026-11-04T04:58:52+00:00",
           "localizedDescription": "Build 68",
           "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.68.ipa",
           "size": 1982836
@@ -39,19 +39,19 @@
       "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
       "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub.png",
       "tintColor": "#738CFF",
-      "version": "2.27",
+      "version": "2.28",
       "versionDate": "2026-11-04",
-      "versionDescription": "Build 127",
-      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub-2.27.ipa",
-      "size": 74761233,
+      "versionDescription": "Build 128",
+      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub-2.28.ipa",
+      "size": 74761252,
       "versions": [
         {
-          "version": "2.27",
-          "buildVersion": "127",
-          "date": "2026-11-04T04:39:39+00:00",
-          "localizedDescription": "Build 127",
-          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub-2.27.ipa",
-          "size": 74761233
+          "version": "2.28",
+          "buildVersion": "128",
+          "date": "2026-11-04T04:58:52+00:00",
+          "localizedDescription": "Build 128",
+          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub-2.28.ipa",
+          "size": 74761252
         }
       ],
       "appPermissions": {
@@ -76,7 +76,7 @@
         {
           "version": "1.66",
           "buildVersion": "66",
-          "date": "2026-11-04T04:39:39+00:00",
+          "date": "2026-11-04T04:58:52+00:00",
           "localizedDescription": "Build 66",
           "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate-1.66.ipa",
           "size": 283099

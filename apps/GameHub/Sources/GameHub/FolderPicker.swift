@@ -13,7 +13,9 @@ struct FolderPicker: UIViewControllerRepresentable {
     }
 
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder], asCopy: false)
+        // Initializer legacy: trên iOS 27.2 đường UTType mới trả về selection rỗng
+        // (bookmark không resolve được) với app này; thử đường cũ.
+        let picker = UIDocumentPickerViewController(documentTypes: ["public.folder"], in: .open)
         picker.allowsMultipleSelection = false
         picker.delegate = context.coordinator
         return picker
