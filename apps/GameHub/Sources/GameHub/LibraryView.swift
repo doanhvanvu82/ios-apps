@@ -109,7 +109,7 @@ struct LibraryView: View {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Menu {
                     Button { onPickFolder() } label: {
-                        Label(library.gamesRoot == nil ? "Chọn thư mục game" : "Đổi thư mục game",
+                        Label(library.gamesRoot == nil ? "Chọn tệp trong thư mục game" : "Đổi thư mục game",
                               systemImage: "folder.badge.gearshape")
                     }
                     Button { library.refresh() } label: {
@@ -170,11 +170,11 @@ struct LibraryView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Label("Chọn thư mục chứa game", systemImage: "folder.badge.plus")
                     .font(.headline)
-                Text("Chọn một thư mục trong Files (có thể chứa thư mục con phân loại). App tự quét và nhớ thư mục này.")
+                Text("Trong Files, mở thư mục chứa game và chọn một tệp bất kỳ bên trong (vd. file của một game). App dùng thư mục chứa tệp đó, tự quét và nhớ lại.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Button { onPickFolder() } label: {
-                    Text("Chọn thư mục")
+                    Text("Chọn tệp trong thư mục")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)

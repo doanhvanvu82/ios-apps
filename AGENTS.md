@@ -45,12 +45,16 @@ apps/<App>/
 │                       (+ product:/extensions: nếu có extension — xem toolkit/xtool-src/Documentation/xtool.docc/Appex.md)
 ├── Info.plist        — CFBundleDisplayName, các key riêng; version do bump_version.sh ghi
 ├── <Ext>-Info.plist  — (nếu có extension) đặt tên đuôi `-Info.plist` để bump_version.sh ghi cùng version với app
-├── VERSION           — số build, bắt đầu 0
+├── VERSION           — số build, bắt đầu 0 (tăng 1 mỗi lần build)
 ├── AppIcon.png       — 1024×1024
 ├── build.sh          — bọc mỏng: `cd "$(dirname "$0")"; exec ../../toolkit/build_app.sh . "$@"`
 ├── .gitignore        — /.build /xtool *.ipa
 └── Sources/<App>/    — `@main struct …: App` (SwiftUI)
 ```
+
+Version hiển thị = `(1 + VERSION/100).(VERSION % 100)` với minor **luôn 2 chữ số, tối đa 99**:
+build 99 → `1.99`, build 100 → `2.00`, build 199 → `2.99`, build 200 → `3.00`. CFBundleVersion
+vẫn là số build tăng dần (SideStore dựa vào đó để nhận cập nhật).
 
 Build: `apps/<App>/build.sh` (lần đầu hoặc sau khi di chuyển thư mục: `build.sh clean`). Kết quả `apps/<App>/xtool/<Product>.ipa`,
 `sidestore/source.json` tự có app mới, server LAN tự bật.

@@ -3,8 +3,8 @@ import Foundation
 /// Đọc version app từ Info.plist.
 ///
 /// `CFBundleShortVersionString` được `toolkit/bump_version.sh` ghi lúc build
-/// (dạng "1.5" = tính năng 1, lần build thứ 5). Hiển thị trên màn chính
-/// và trong AppLog để biết bản đang cài có phải mới nhất không.
+/// (dạng major.minor, minor 2 chữ số 00–99: 1.99 → 2.00). Hiển thị trên màn
+/// chính và trong AppLog để biết bản đang cài có phải mới nhất không.
 enum AppVersion {
     static let short: String =
         (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)

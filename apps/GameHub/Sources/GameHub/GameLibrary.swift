@@ -100,6 +100,12 @@ final class GameLibrary: ObservableObject {
         let scoped = url.startAccessingSecurityScopedResource()
         AppLog.info("startAccessingSecurityScopedResource → \(scoped)")
         if scoped { rootAccess = url as NSObject }
+        if let entries = try? FileManager.default.contentsOfDirectory(
+            at: url, includingPropertiesForKeys: [.isDirectoryKey]) {
+            AppLog.info("Đọc được thư mục: \(entries.count) mục")
+        } else {
+            AppLog.error("Không đọc được thư mục \(url.lastPathComponent) (sandbox/scope)")
+        }
         gamesRoot = url
         saveBookmark(for: url)
         statusMessage = "Đã chọn thư mục: \(url.lastPathComponent) — đang quét…"
@@ -107,15 +113,24 @@ final class GameLibrary: ObservableObject {
     }
 
     /// Kết quả từ `FolderPicker` chọn thư mục game (màn chính + Cài đặt).
+    ///
+    /// Picker chọn folder hỏng trên iOS 27.2 với app này nên người dùng chọn một
+    /// tệp nằm trong thư mục game; app dùng thư mục chứa tệp đó.
     func handleFolderPick(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
-            if let url = urls.first {
-                setGamesRoot(url)
-            } else {
+            guard let picked = urls.first else {
                 AppLog.warn("Picker trả về danh sách rỗng")
                 statusMessage = "Không nhận được thư mục nào."
+                return
             }
+            let scoped = picked.startAccessingSecurityScopedResource()
+            let isDirectory = (try? picked.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+            if scoped { picked.stopAccessingSecurityScopedResource() }
+
+            let root = (isDirectory || picked.hasDirectoryPath) ? picked : picked.deletingLastPathComponent()
+            AppLog.info("Picker trả về: \(picked.lastPathComponent) → thư mục \(root.lastPathComponent)")
+            setGamesRoot(root)
         case .failure(let error):
             if (error as? CocoaError)?.code == .userCancelled { return }
             AppLog.error("Lỗi chọn thư mục: \(error)")

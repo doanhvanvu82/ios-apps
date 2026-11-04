@@ -12,6 +12,9 @@
 #      plist của app extension (<app>/*-Info.plist) — iOS đòi version
 #      extension trùng app chứa.
 #
+# Version hiển thị: major.minor với minor 2 chữ số, tối đa 99:
+#   build 99 → 1.99, build 100 → 2.00, build 199 → 2.99, build 200 → 3.00.
+#
 set -euo pipefail
 
 APP_DIR="${1:?Cách dùng: bump_version.sh <thư-mục-app>}"
@@ -28,16 +31,19 @@ import os
 import plistlib
 import sys
 
-build, paths = sys.argv[1], [p for p in sys.argv[2:] if os.path.isfile(p)]
+build, paths = int(sys.argv[1]), [p for p in sys.argv[2:] if os.path.isfile(p)]
+# Version hiển thị: major.minor, minor luôn 2 chữ số và tối đa 99.
+# build 99 → 1.99, build 100 → 2.00, build 199 → 2.99, build 200 → 3.00.
+major = 1 + build // 100
+minor = build % 100
 for path in paths:
     with open(path, "rb") as f:
         pl = plistlib.load(f)
 
-    # Version hiển thị: major.minor cố định, build number thay đổi theo lần build.
-    pl["CFBundleShortVersionString"] = f"1.{build}"
+    pl["CFBundleShortVersionString"] = f"{major}.{minor:02d}"
     pl["CFBundleVersion"] = str(build)
 
     with open(path, "wb") as f:
         plistlib.dump(pl, f)
-print(f"✅ Version 1.{build} (build {build}) → " + ", ".join(os.path.basename(p) for p in paths))
+print(f"✅ Version {major}.{minor:02d} (build {build}) → " + ", ".join(os.path.basename(p) for p in paths))
 PY
