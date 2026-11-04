@@ -106,16 +106,18 @@ final class GameLibrary: ObservableObject {
         refresh()
     }
 
-    /// Kết quả từ `.fileImporter` chọn thư mục game (màn chính + Cài đặt).
+    /// Kết quả từ `FolderPicker` chọn thư mục game (màn chính + Cài đặt).
     func handleFolderPick(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
             if let url = urls.first {
                 setGamesRoot(url)
             } else {
+                AppLog.warn("Picker trả về danh sách rỗng")
                 statusMessage = "Không nhận được thư mục nào."
             }
         case .failure(let error):
+            if (error as? CocoaError)?.code == .userCancelled { return }
             AppLog.error("Lỗi chọn thư mục: \(error)")
             statusMessage = "Không chọn được thư mục: \(error.localizedDescription)"
         }

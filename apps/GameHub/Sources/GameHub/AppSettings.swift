@@ -172,10 +172,11 @@ struct SettingsView: View {
                     Button("Xong") { dismiss() }
                 }
             }
-            .fileImporter(isPresented: $showingFolderPicker,
-                          allowedContentTypes: [.folder],
-                          allowsMultipleSelection: false) { result in
-                library.handleFolderPick(result)
+            .sheet(isPresented: $showingFolderPicker) {
+                FolderPicker { result in
+                    showingFolderPicker = false
+                    library.handleFolderPick(result)
+                }
             }
             .confirmationDialog("Xoá tất cả ảnh bìa đã chụp?", isPresented: $confirmingClearCovers,
                                 titleVisibility: .visible) {

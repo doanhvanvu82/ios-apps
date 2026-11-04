@@ -37,12 +37,11 @@ struct ContentView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }
-        .fileImporter(
-            isPresented: $showingFolderPicker,
-            allowedContentTypes: [.folder],
-            allowsMultipleSelection: false
-        ) { result in
-            library.handleFolderPick(result)
+        .sheet(isPresented: $showingFolderPicker) {
+            FolderPicker { result in
+                showingFolderPicker = false
+                library.handleFolderPick(result)
+            }
         }
         .onAppear {
             // KHÔNG tự quét khi vào app — danh sách lần trước vẫn hiển thị,

@@ -12,7 +12,7 @@
       "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker.png",
       "tintColor": "#738CFF",
       "version": "1.68",
-      "versionDate": "2026-11-03",
+      "versionDate": "2026-11-04",
       "versionDescription": "Build 68",
       "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.68.ipa",
       "size": 1982836,
@@ -20,7 +20,7 @@
         {
           "version": "1.68",
           "buildVersion": "68",
-          "date": "2026-11-03T22:19:35+00:00",
+          "date": "2026-11-04T03:48:32+00:00",
           "localizedDescription": "Build 68",
           "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.68.ipa",
           "size": 1982836
@@ -39,19 +39,19 @@
       "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
       "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub.png",
       "tintColor": "#738CFF",
-      "version": "1.122",
-      "versionDate": "2026-11-03",
-      "versionDescription": "Build 122",
-      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub-1.122.ipa",
-      "size": 74752162,
+      "version": "1.123",
+      "versionDate": "2026-11-04",
+      "versionDescription": "Build 123",
+      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub-1.123.ipa",
+      "size": 74759145,
       "versions": [
         {
-          "version": "1.122",
-          "buildVersion": "122",
-          "date": "2026-11-03T22:19:35+00:00",
-          "localizedDescription": "Build 122",
-          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub-1.122.ipa",
-          "size": 74752162
+          "version": "1.123",
+          "buildVersion": "123",
+          "date": "2026-11-04T03:48:32+00:00",
+          "localizedDescription": "Build 123",
+          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub-1.123.ipa",
+          "size": 74759145
         }
       ],
       "appPermissions": {
@@ -68,7 +68,7 @@
       "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate.png",
       "tintColor": "#738CFF",
       "version": "1.66",
-      "versionDate": "2026-11-03",
+      "versionDate": "2026-11-04",
       "versionDescription": "Build 66",
       "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate-1.66.ipa",
       "size": 283099,
@@ -76,7 +76,7 @@
         {
           "version": "1.66",
           "buildVersion": "66",
-          "date": "2026-11-03T22:19:35+00:00",
+          "date": "2026-11-04T03:48:32+00:00",
           "localizedDescription": "Build 66",
           "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate-1.66.ipa",
           "size": 283099
