@@ -187,14 +187,14 @@ Script sẽ tự động:
 
 Toàn bộ bước trên nằm trong pipeline chung `../../toolkit/build_app.sh` (xem `~/Documents/Code/ios/AGENTS.md`); `build.sh` của GameHub chỉ vẽ icon và ghi `GameHubDevServer` trước khi gọi pipeline.
 
-Cài lên iPhone — **cập nhật qua SideStore, không cần chép IPA**:
+Cài lên iPhone — **cập nhật qua Ksign, không cần chép IPA**:
 
-`build.sh` cập nhật "source" SideStore **chung cho mọi app** ở `~/Documents/Code/ios/sidestore/` (`source.json` + icon + `GameHub-1.<N>.ipa`)
+`build.sh` cập nhật "source" AltStore **chung cho mọi app** ở `~/Documents/Code/ios/sidestore/` (`source.json` + icon + `GameHub-1.<N>.ipa`)
 và bật server LAN (`toolkit/serve_sidestore.sh`, port 8765, chạy nền).
 
-1. Một lần: SideStore → **Sources** → **+** → `http://<IP máy tính>:8765/source.json`
+1. Một lần: Ksign → **Sources** → **+** → `http://<IP máy tính>:8765/source.json`
    (`build.sh` in ra đúng URL). iPhone và máy tính phải cùng Wi-Fi.
-2. Mỗi lần build: SideStore → **My Apps** → kéo xuống làm mới → **Update** GameHub.
+2. Mỗi lần build: mở source trong Ksign → tải/cài bản mới của GameHub.
 
 `../../toolkit/serve_sidestore.sh stop` để tắt server.
 

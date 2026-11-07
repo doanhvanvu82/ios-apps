@@ -1,19 +1,20 @@
-# AGENTS.md — Workspace app iOS (build trên Linux bằng xtool, cài qua SideStore)
+# AGENTS.md — Workspace app iOS (build trên Linux bằng xtool, cài qua Ksign)
 
 Trả lời bằng tiếng Việt. Máy là **Ubuntu, không có Xcode/macOS**: mọi app iOS ở đây build bằng
-SwiftPM + xtool trên Linux, cài lên iPhone qua SideStore (Apple ID miễn phí). Không làm được app macOS.
+SwiftPM + xtool trên Linux, cài lên iPhone qua **Ksign** (app ký/cài IPA chạy trên máy, dùng chứng chỉ;
+không giới hạn số app / App ID như Apple ID miễn phí). Không làm được app macOS.
 
 ## Cấu trúc
 
 ```
 ~/Documents/Code/ios/
 ├── toolkit/                 — đồ dùng chung, KHÔNG chép sang từng app
-│   ├── build_app.sh <app> [clean]  — pipeline build: toolchain → sync SDK → bump version → xtool → icon → SideStore
+│   ├── build_app.sh <app> [clean]  — pipeline build: toolchain → sync SDK → bump version → xtool → icon → source/serve
 │   ├── bump_version.sh <app>       — tăng <app>/VERSION, ghi vào <app>/Info.plist
 │   ├── patch_icon.sh <ipa> <png>   — chèn icon (resize từ 1024×1024) vào IPA
 │   ├── sidestore_source.py         — gộp apps/*/xtool/*.ipa thành sidestore/source.json
 │   ├── dev_server.py, serve_sidestore.sh [stop] — server LAN port 8765 (+ POST /clipboard; POST /log → .state/iphone_log.txt)
-│   ├── publish_github.sh [--dry-run] — sinh source.json trỏ GitHub Releases + push + upload IPA (URL cố định cho SideStore)
+│   ├── publish_github.sh [--dry-run] — sinh source.json trỏ GitHub Releases + push + upload IPA (URL cố định cho Ksign)
 │   ├── pull_app_logs.sh <bundleID> — iPhone cắm USB: chép Documents/Logs của app → .state/logs/<bundleID>/ (cần ifuse)
 │   ├── xtool.AppImage              — xtool 1.22.2
 │   └── xtool-src/                  — clone mã nguồn xtool để tra cứu (PackLib/ = cách đóng gói)
@@ -54,21 +55,28 @@ apps/<App>/
 
 Version hiển thị = `(1 + VERSION/100).(VERSION % 100)` với minor **luôn 2 chữ số, tối đa 99**:
 build 99 → `1.99`, build 100 → `2.00`, build 199 → `2.99`, build 200 → `3.00`. CFBundleVersion
-vẫn là số build tăng dần (SideStore dựa vào đó để nhận cập nhật).
+vẫn là số build tăng dần (Ksign dựa vào đó để nhận cập nhật).
 
 Build: `apps/<App>/build.sh` (lần đầu hoặc sau khi di chuyển thư mục: `build.sh clean`). Kết quả `apps/<App>/xtool/<Product>.ipa`,
 `sidestore/source.json` tự có app mới, server LAN tự bật.
 
 ## Cài lên iPhone
 
-1. Một lần: SideStore → Sources → + → `http://<IP máy tính>:8765/source.json` (build in ra URL; cùng Wi-Fi).
-2. Mỗi lần build: SideStore → My Apps → làm mới → Update. App mới: Browse → source "iOS apps (máy nhà)".
+Cài bằng **Ksign** (đã cài trên iPhone): ký lại IPA bằng chứng chỉ rồi cài — không giới hạn số app/App ID.
+Hai cách đưa bản build sang máy:
+
+1. **Qua source**: một lần Ksign → Sources → **+** → `http://<IP máy tính>:8765/source.json` (build in ra URL; cùng Wi-Fi)
+   hoặc URL GitHub ở README; mỗi lần build mở source → tải/cài bản mới. App mới cũng nằm trong source.
+2. **Qua file**: tải `<App>.ipa` (LAN hoặc GitHub Releases) rồi import vào Ksign để ký và cài.
+
+Chứng chỉ dùng để ký có thể bị thu hồi → app không mở được, phải ký/cài lại.
 
 `xtool install` / `xtool dev run` qua USB **không dùng được** (đăng nhập Apple bằng mật khẩu bị từ chối `-80046`).
 
 ## Giới hạn / bẫy đã gặp
 
-- Apple ID miễn phí: tối đa 3 app active (tính cả SideStore), 10 App ID / 7 ngày; mỗi app extension tốn thêm 1 App ID.
+- Ksign ký bằng chứng chỉ nên không có hạn mức 3 app / 10 App ID của Apple ID miễn phí; đổi lại chứng chỉ có thể bị
+  thu hồi → app ngừng mở, phải ký/cài lại.
 - Không có asset catalog → icon chèn sau build (`patch_icon.sh`); không có storyboard → dùng `UILaunchScreen` trong Info.plist.
 - Dependency SwiftPM khai báo system library (vd `zlib`) sẽ link nhầm thư viện Linux → vendor vào `Vendor/` và bỏ phần đó
   (xem `apps/GameHub/Package.swift`).
@@ -88,7 +96,7 @@ Build: `apps/<App>/build.sh` (lần đầu hoặc sau khi di chuyển thư mục
   chiếu code của target extension → linker bỏ sạch, iOS báo `RBSLaunchRequest … Launch failed`. Target extension phải có
   `linkerSettings: [.unsafeFlags(["-Xlinker", "-u", "-Xlinker", "_OBJC_CLASS_$_<PrincipalClass>"])]` và lớp principal khai
   báo `@objc(<PrincipalClass>)`. Kiểm tra sau build: `~/swift-dev/usr/bin/llvm-nm <appex>/<binary> | wc -l` phải hàng trăm symbol, không phải 3.
-- Safari Web Extension sau khi cập nhật app qua SideStore: Safari có thể giữ extension cũ đến khi nạp lại → lỗi
+- Safari Web Extension sau khi cập nhật app qua Ksign: Safari có thể giữ extension cũ đến khi nạp lại → lỗi
   `RBSLaunchRequest … Launch failed` khi gọi native. Cần thử lại + nút `browser.runtime.reload()` trong popup
   (xem `apps/AdsBlocker`); không được thì đóng hẳn Safari.
 - Safari Web Extension cần dữ liệu lớn (bộ lọc): sinh lúc build bằng script trong `tools/` của app (xem `apps/AdsBlocker/tools/build-filters.mjs`,

@@ -7,7 +7,7 @@
 # File <app>/VERSION lưu build number. `build_app.sh` gọi script này TRƯỚC
 # khi build để:
 #   1. Tăng VERSION lên 1 (mỗi lần build = 1 bản mới, không bao giờ trùng —
-#      SideStore chỉ nhận cập nhật khi version đổi).
+#      Ksign chỉ nhận cập nhật khi version đổi).
 #   2. Ghi CFBundleShortVersionString + CFBundleVersion vào <app>/Info.plist và
 #      plist của app extension (<app>/*-Info.plist) — iOS đòi version
 #      extension trùng app chứa.

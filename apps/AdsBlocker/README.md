@@ -16,13 +16,13 @@ cd ~/Documents/Code/ios/apps/AdsBlocker
 ./build.sh          # pipeline chung ../../toolkit/build_app.sh → xtool/AdsBlocker.ipa
 ```
 
-1. SideStore → Browse → source **iOS apps (máy nhà)** (`http://<IP máy tính>:8765/source.json`) → cài **AdsBlocker**.
-   Cập nhật sau này: SideStore → My Apps → Update.
+1. Ksign → source **iOS apps (máy nhà)** (`http://<IP máy tính>:8765/source.json`) → ký và cài **AdsBlocker**
+   (hoặc tải `AdsBlocker.ipa` rồi import vào Ksign).
 2. **Cài đặt › Ứng dụng › Safari › Tiện ích mở rộng › AdsBlocker** → bật, cho phép **Mọi trang web**.
 3. Trong Safari: biểu tượng ô ghép hình trên thanh địa chỉ › **AdsBlocker** › **Cài đặt AI**: dán API key
    (tạo miễn phí tại aistudio.google.com), bấm **Tải danh sách model** rồi chọn model.
 
-AdsBlocker dùng 2 App ID (app + extension). Apple ID miễn phí chỉ có 10 App ID mỗi 7 ngày.
+AdsBlocker dùng 2 App ID (app + extension); Ksign ký bằng chứng chỉ nên không vướng hạn mức App ID.
 
 ## Cách hoạt động
 

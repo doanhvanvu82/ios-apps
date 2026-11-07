@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Sinh "source" SideStore/AltStore chung cho mọi app trong apps/.
+"""Sinh "source" AltStore (Ksign đọc được) chung cho mọi app trong apps/.
 
     python3 toolkit/sidestore_source.py [base-url] [--source-url URL]
     python3 toolkit/sidestore_source.py --print-base
 
 Quét apps/*/xtool/*.ipa (bản build gần nhất của từng app). Kết quả trong thư mục
 SOURCE_OUT (mặc định sidestore/):
-    source.json            ← thêm URL này vào SideStore (1 lần, dùng cho mọi app)
+    source.json            ← thêm URL này vào Ksign (1 lần, dùng cho mọi app)
     <App>.png              ← icon lấy từ IPA
-    <App>-1.<N>.ipa        ← tên có version để SideStore không dùng bản cache cũ
+    <App>-1.<N>.ipa        ← tên có version để không dùng bản cache cũ
 
 base-url là nơi chứa các file trên: IP LAN (phục vụ bằng toolkit/serve_sidestore.sh)
 hoặc URL GitHub Releases (do toolkit/publish_github.sh sinh ra, SOURCE_OUT=source).
@@ -27,8 +27,8 @@ from datetime import datetime, timezone
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, os.environ.get("SOURCE_OUT", "sidestore"))
 PORT = int(os.environ.get("SIDESTORE_PORT", "8765"))
-# Giữ identifier của source GameHub cũ: SideStore đã thêm source này, đổi
-# identifier thì phải xoá source và thêm lại trên iPhone.
+# Giữ identifier của source cũ: client đã thêm source này, đổi identifier thì
+# phải xoá source và thêm lại trên iPhone.
 SOURCE_ID = "vn.vudv.gamehub.source"
 
 
@@ -118,7 +118,7 @@ def main():
     with open(os.path.join(OUT, "source.json"), "w", encoding="utf-8") as fh:
         json.dump(source, fh, ensure_ascii=False, indent=2)
     listed = ", ".join(f"{a['name']} {a['version']}" for a in apps)
-    print(f"✅ SideStore source: {source_url}  ({listed})")
+    print(f"✅ Source Ksign: {source_url}  ({listed})")
 
 
 if __name__ == "__main__":

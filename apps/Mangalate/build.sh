@@ -5,7 +5,7 @@
 #   ./build.sh          -> build (incremental)
 #   ./build.sh clean    -> xóa build cache rồi build lại từ đầu
 #
-# Kết quả: ./xtool/Mangalate.ipa, source SideStore chung có Mangalate.
+# Kết quả: ./xtool/Mangalate.ipa, source AltStore chung có Mangalate.
 #
 set -euo pipefail
 cd "$(dirname "$0")"

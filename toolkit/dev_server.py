@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Server LAN cho iPhone (chạy nền qua toolkit/serve_sidestore.sh).
 
-- GET  /…          → file trong sidestore/ (source SideStore chung + IPA mọi app).
+- GET  /…          → file trong sidestore/ (source AltStore cho Ksign + IPA mọi app).
 - POST /clipboard  → đặt body (UTF-8) vào clipboard máy tính, lưu thêm ra
                      .state/iphone_clipboard.txt. App gọi từ nút "Gửi về máy
                      tính" (vd: màn Log của GameHub).

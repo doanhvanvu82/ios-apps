@@ -1,7 +1,7 @@
-# iOS apps (build trên Linux, cài qua SideStore)
+# iOS apps (build trên Linux, cài qua Ksign)
 
 Ba app iOS build bằng **SwiftPM + [xtool](https://github.com/xtool-org/xtool) trên Ubuntu** (không cần Xcode/macOS),
-phân phối qua **SideStore/AltStore** với một URL cố định trên GitHub:
+phân phối qua **Ksign** (đọc source AltStore) với một URL cố định trên GitHub:
 
 ```
 https://raw.githubusercontent.com/doanhvanvu82/ios-apps/main/source/source.json
@@ -17,10 +17,11 @@ https://raw.githubusercontent.com/doanhvanvu82/ios-apps/main/source/source.json
 
 ## Cài đặt
 
-1. Một lần: SideStore → Sources → **+** → dán URL ở trên.
-2. Mỗi bản mới: SideStore → My Apps → Update (hoặc Browse → source này để cài app mới).
+1. Một lần: cài **Ksign** trên iPhone → Sources → **+** → dán URL ở trên (hoặc tải IPA ở
+   `releases/download/builds/` rồi import vào Ksign để ký và cài).
+2. Mỗi bản mới: mở source trong Ksign → tải/cài bản mới.
 
-IPA tải từ `releases/download/builds/`, tên file có version (`GameHub-1.122.ipa`) nên SideStore không dùng cache cũ.
+IPA tải từ `releases/download/builds/`, tên file có version (`GameHub-1.122.ipa`) nên không dùng cache bản cũ.
 
 ## Build
 
@@ -61,7 +62,7 @@ Mỗi lần publish, asset của bản cũ bị xoá khỏi release để releas
 ## Cấu trúc
 
 ```
-toolkit/           — build, version, icon, source SideStore, server LAN, publish (dùng chung)
+toolkit/           — build, version, icon, source AltStore (Ksign), server LAN, publish (dùng chung)
 source/            — source.json đã publish (sinh bởi toolkit/publish_github.sh)
 apps/<App>/        — mỗi app một thư mục (Package.swift, xtool.yml, Info.plist, Sources/)
 ```
@@ -71,6 +72,7 @@ bộ lọc sinh lúc build, `toolkit/xtool.AppImage`, `.state/`, `sidestore/` �
 
 ## Giới hạn
 
-- Apple ID miễn phí: tối đa 3 app active (tính cả SideStore), 10 App ID / 7 ngày; mỗi app extension tốn thêm 1 App ID.
+- Ksign + chứng chỉ: không giới hạn số app/App ID (khác Apple ID miễn phí); rủi ro là chứng chỉ bị thu hồi
+  → app ngừng mở, phải ký/cài lại.
 - Không chạy được app/simulator trên Linux — chỉ build + kiểm tra IPA; hành vi thực tế do người dùng thử trên iPhone.
-- Repo public: bất kỳ ai có URL đều tải được IPA (bản build dùng Apple ID của bạn, không phải IPA đã ký lại được cho máy khác).
+- Repo public: bất kỳ ai có URL đều tải được IPA; IPA build ra chưa ký nên người khác tải về phải tự ký bằng Ksign.

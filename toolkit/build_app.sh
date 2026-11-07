@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Build một app iOS (SwiftPM + xtool) thành file .ipa trên Linux, rồi đưa lên
-# source SideStore chung (../sidestore) và bật server LAN.
+# source AltStore chung (../sidestore) và bật server LAN.
 #
 #   toolkit/build_app.sh <thư-mục-app>          -> build (incremental)
 #   toolkit/build_app.sh <thư-mục-app> clean    -> xóa build cache rồi build lại từ đầu
@@ -91,7 +91,7 @@ echo "✅ Xong: $APP_DIR/$IPA"
 ls -lh "$IPA"
 
 # ---------------------------------------------------------------------------
-# 7. Source SideStore chung + server LAN
+# 7. Source AltStore chung + server LAN
 # ---------------------------------------------------------------------------
 echo
 python3 "$TOOLKIT/sidestore_source.py"

@@ -5,8 +5,8 @@
 #   ./build.sh          -> build (incremental)
 #   ./build.sh clean    -> xóa toàn bộ build cache rồi build lại từ đầu
 #
-# Mỗi lần build còn cập nhật source SideStore chung (../../sidestore/) và bật
-# server LAN → trên iPhone mở SideStore, cập nhật GameHub (không cần chép IPA).
+# Mỗi lần build còn cập nhật source AltStore chung (../../sidestore/) và bật
+# server LAN → trên iPhone mở Ksign, tải/cài GameHub (không cần chép IPA).
 #
 # Kết quả: ./xtool/GameHub.ipa
 #

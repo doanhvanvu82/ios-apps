@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Đẩy bản build mới nhất của mọi app lên GitHub Releases và cập nhật
-# source/source.json — để SideStore/AltStore dùng một URL CỐ ĐỊNH
+# source/source.json — để Ksign (đọc source AltStore) dùng một URL CỐ ĐỊNH
 # (raw.githubusercontent.com) thay vì IP LAN đổi theo mạng.
 #
 #   toolkit/publish_github.sh             -> sinh source + commit/push + upload release
@@ -60,14 +60,14 @@ export GH_TOKEN
 if ! gh repo view "$OWNER/$REPO" >/dev/null 2>&1; then
     echo "→ Tạo repo $OWNER/$REPO (public)…"
     gh repo create "$OWNER/$REPO" --public \
-        --description "App iOS build bằng xtool trên Linux, phân phối qua SideStore/AltStore"
+        --description "App iOS build bằng xtool trên Linux, phân phối qua Ksign"
 fi
 
 [ -d .git ] || git init -q -b main
 git remote get-url origin >/dev/null 2>&1 \
     || git remote add origin "https://github.com/$OWNER/$REPO.git"
 
-git add -A
+git add source/source.json
 if ! git diff --cached --quiet; then
     git commit -q -m "build: cập nhật source.json $(date -u +%Y-%m-%dT%H:%MZ)"
 fi
@@ -79,7 +79,7 @@ echo "→ Đã push source.json."
 # ---------------------------------------------------------------------------
 if ! gh release view "$TAG" >/dev/null 2>&1; then
     gh release create "$TAG" --title "Bản build mới nhất" --latest \
-        --notes "IPA mới nhất của mọi app. Source SideStore: $SOURCE_URL"
+        --notes "IPA mới nhất của mọi app. Source Ksign: $SOURCE_URL"
 fi
 
 shopt -s nullglob
@@ -98,6 +98,6 @@ while read -r asset; do
 done < <(gh release view "$TAG" --json assets -q '.assets[].name')
 
 echo
-echo "✅ Source cố định cho SideStore:"
+echo "✅ Source cố định cho Ksign:"
 echo "   $SOURCE_URL"
 echo "   (IPA tải từ $BASE/<App>-<version>.ipa)"

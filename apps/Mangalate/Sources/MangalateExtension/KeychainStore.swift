@@ -2,7 +2,7 @@ import Foundation
 import Security
 
 /// Generic password trong keychain mặc định của appex — không cần App Group
-/// hay keychain sharing, nên SideStore ký lại không mất quyền truy cập.
+/// hay keychain sharing, nên ký lại khi cài (Ksign) không mất quyền truy cập.
 enum KeychainStore {
     private static let service = "vn.vudv.mangalate"
 

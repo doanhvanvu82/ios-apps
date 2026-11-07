@@ -27,6 +27,9 @@ sidestore/
 source/*.ipa
 source/*.png
 
+# --- Mods game: làm & build IPA riêng ở local, KHÔNG lên GitHub (nặng ~1,4 GB) ---
+mods/
+
 # --- OS ---
 .DS_Store
 

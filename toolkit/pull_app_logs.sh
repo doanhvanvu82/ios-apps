@@ -17,7 +17,7 @@ if ! idevicepair validate >/dev/null 2>&1; then
     exit 1
 fi
 
-# SideStore ký lại với bundle ID có thêm hậu tố team ID (vn.vudv.adsblocker.64MBZK65W9) → tìm theo tiền tố.
+# Công cụ cài ký lại với bundle ID có thêm hậu tố team ID (vn.vudv.adsblocker.64MBZK65W9) → tìm theo tiền tố.
 INSTALLED=$(ifuse --list-apps | cut -d, -f1 | grep -E "^${BUNDLE//./\\.}(\.[A-Z0-9]+)?$" | head -1) || true
 [ -n "$INSTALLED" ] || { echo "Không thấy app $BUNDLE có bật chia sẻ tệp (UIFileSharingEnabled) trên iPhone."; exit 1; }
 
