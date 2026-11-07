@@ -226,7 +226,6 @@ final class SyncEngine: ObservableObject {
 
     /// Xử lý 1 entry.
     private func processEntry(_ entry: JournalEntry, rootIDs: [String: String]) async throws {
-        let rawOp = try JSONEncoder().encode(entry.op)
         switch entry.op {
         case let .uploadFile(path):
             try await uploadFile(path: path)
@@ -236,10 +235,10 @@ final class SyncEngine: ObservableObject {
             try await renameOrMove(from: from, to: to, rootIDs: rootIDs)
         case let .move(from, to):
             try await renameOrMove(from: from, to: to, rootIDs: rootIDs)
-        case let .delete(path, _):
-            try await deleteFile(path: path, rawSnapshot: rawOp)
-        case let .restoreTrash(path, _):
-            try await restoreTrashed(path: path, rawSnapshot: rawOp)
+        case let .delete(path, snapshot):
+            try await deleteFile(path: path, snapshot: snapshot)
+        case let .restoreTrash(path, node):
+            try await restoreTrashed(path: path, node: node)
         }
     }
 
@@ -257,27 +256,14 @@ final class SyncEngine: ObservableObject {
 
     // MARK: - Xóa / khôi phục (Đã xóa gần đây)
 
-    /// Snapshot đi kèm op delete/restoreTrash: bản mới là TrashSnapshot; op cũ
-    /// (bản app trước) chỉ mã hoá IndexNode — nhận cả hai để op chờ dở không chết.
-    private func snapshot(from raw: Data) -> TrashSnapshot? {
-        if let snap = try? JSONDecoder().decode(TrashSnapshot.self, from: raw) {
-            return snap
-        }
-        if let node = try? JSONDecoder().decode(IndexNode.self, from: raw) {
-            return TrashSnapshot(root: node, children: [:])
-        }
-        return nil
-    }
-
     /// Xóa: trash các part của root + con trên Drive (thùng rác Drive giữ 30 ngày,
     /// khớp với thùng rác local — khôi phục sẽ untrash lại). Op không kèm snapshot
     /// (luồng xóa mới) → đọc từ TrashStore — dữ liệu local đã chuyển vào đó.
-    private func deleteFile(path: String, rawSnapshot: Data) async throws {
-        guard let snap = snapshot(from: rawSnapshot) else { return }
-        guard let node = snap.root ?? TrashStore.shared.node(forOriginalPath: path) else { return }
+    private func deleteFile(path: String, snapshot: TrashSnapshot?) async throws {
+        guard let node = snapshot?.root ?? TrashStore.shared.node(forOriginalPath: path) else { return }
         try await trashParts(of: node)
-        let children = !snap.children.isEmpty
-            ? snap.children
+        let children = snapshot?.children.isEmpty == false
+            ? snapshot!.children
             : TrashStore.shared.children(forOriginalPath: path)
         for (_, child) in children where !child.isDirectory {
             try await trashParts(of: child)
@@ -297,20 +283,24 @@ final class SyncEngine: ObservableObject {
     /// Part chưa upload (driveFileId nil) bỏ qua — op uploadFile đi trước trong
     /// journal sẽ upload mới từ mirror. Part 404 (bị Drive dọn) → upload lại.
     /// Node trong index đã do UI upsert khi khôi phục — giữ nguyên.
-    private func restoreTrashed(path: String, rawSnapshot: Data) async throws {
-        guard let snap = snapshot(from: rawSnapshot), let node = snap.root else { return }
-        var parts = node.parts ?? []
-        for i in parts.indices {
-            guard let partID = parts[i].driveFileId,
-                  let client = accounts.client(for: parts[i].accountEmail) else { continue }
+    private func restoreTrashed(path: String, node: IndexNode) async throws {
+        guard let parts = node.parts else { return }
+        for part in parts {
+            guard let partID = part.driveFileId,
+                  let client = accounts.client(for: part.accountEmail) else { continue }
             do {
                 try await client.untrash(id: partID)
-                AppLog.log("sync", "♻️ Untrash part \(parts[i].index) của \(node.name)")
+                AppLog.log("sync", "♻️ Untrash part \(part.index) của \(node.name)")
             } catch let err as DriveError {
                 if case .http(404, _, _) = err {
                     // Part bị dọn khỏi thùng rác (quá 30 ngày) → upload lại từ mirror.
-                    parts[i].driveFileId = nil
-                    index.update(path: path) { $0.parts = parts }
+                    index.update(path: path) { current in
+                        current.parts = current.parts?.map { p in
+                            var q = p
+                            if q.index == part.index { q.driveFileId = nil }
+                            return q
+                        }
+                    }
                     try await uploadFile(path: path)
                 } else {
                     throw err
