@@ -112,4 +112,9 @@ Chứng chỉ dùng để ký có thể bị thu hồi → app không mở đư�
   biến thể API, kể cả chọn file) log `didPickDocumentURLs … empty array` + `Could not resolve bookmark. Cocoa 257`; app
   App Store (a-Shell) và app cài bằng Xcode thì chọn bình thường (xem seedds/nxnative#1148). Không sửa được bằng code hay
   SDK/Info.plist — dùng thư mục mặc định trong container (`Documents/GameHub/Games`, xem `apps/GameHub`); giữ bản gốc dữ
-  liệu người dùng ở ngoài app và copy vào container thay vì move.
+  liệu người dùng ở ngoài app và copy vào container thay vì move. MyDrive 1.24 thực tế chọn được file lẫn folder từ
+  picker (app sideload) — ghi chép ban đầu này có thể chỉ đúng với một số nguồn mở (Files app nội bộ…).
+- **`UIDocumentPickerViewController` chọn THƯ MỤC phải `asCopy: false`** — `asCopy: true` với content type `.folder`
+  ném exception ngay khi tạo picker → app crash. File (`.data`) mới được copy; folder chỉ được mở tại chỗ (nhận URL
+  security-scoped, caller tự copy cả cây rồi `stopAccessingSecurityScopedResource`, đừng xoá URL đó — là thư mục thật
+  của người dùng). Xem `apps/MyDrive` › `FolderDocumentPicker`, `importDroppedFolder`.
