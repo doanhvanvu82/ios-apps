@@ -64,7 +64,10 @@ final class SyncEngine: ObservableObject {
     // MARK: - Vòng đời app
 
     @objc private func appDidBecomeActive() {
-        // File mới kéo vào Inbox qua USB File Sharing lúc app không chạy.
+        // File mới kéo vào mirror qua USB File Sharing lúc app không chạy:
+        // UI đọc đĩa lúc vẽ nên phải báo đổi ngay để danh sách quét lại,
+        // không chờ sync (debounce 2s) hay phải tạo thư mục mới.
+        FileSystemStore.shared.notifyChanged()
         InboxImporter.processInbox()
         triggerSync()
     }
@@ -726,6 +729,7 @@ final class SyncEngine: ObservableObject {
         }
         if adopted > 0 {
             AppLog.log("sync", "📥 Nhận nuôi \(adopted) mục có sẵn trong mirror")
+            store.notifyChanged()   // UI reload để thấy ngay các mục mới nhận nuôi
         }
     }
 }
