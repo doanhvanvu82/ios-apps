@@ -158,6 +158,12 @@ final class SyncEngine: ObservableObject {
         // 1) KHÔI PHỤC: nếu index rỗng local nhưng Drive có index (cài lại) → nạp.
         await restoreIndexIfNeeded(rootIDs: rootIDs)
 
+        // 1.5) TỰ LÀNH: file đã đăng ký trong index nhưng part chưa upload xong
+        //      (op upload mất do crash/migration/bug cũ) → xếp lại hàng đợi.
+        //      Không có bước này, file kẹt "parts nil/unfinished" mãi mãi không lên Drive
+        //      dù journal rỗng và sync báo thành công (bug thật đã gặp 07/11/2026).
+        requeueUnfinishedUploads()
+
         // 2) Đẩy các op trong Journal (mọi thay đổi người dùng).
         await processJournal(rootIDs: rootIDs)
 
@@ -701,6 +707,35 @@ final class SyncEngine: ObservableObject {
     }
 
     // MARK: - Nhận nuôi file có sẵn trong mirror (kéo thả USB / index mất)
+
+    /// File ĐÃ có trong index nhưng chưa upload xong (parts nil, hoặc có part
+    /// accountEmail rỗng / driveFileId nil) mà journal KHÔNG còn op tương ứng
+    /// → xếp lại op upload. Đây là lưới an toàn cho mất journal (crash, migration,
+    /// bug decode) — không có nó thì file kẹt vĩnh viễn "đã đồng bộ" trên UI
+    /// nhưng thực chất chưa lên Drive.
+    private func requeueUnfinishedUploads() {
+        let pendingOps = journal.pending()
+        var queuedPaths = Set<String>()
+        for e in pendingOps {
+            if case let .uploadFile(p) = e.op { queuedPaths.insert(p) }
+        }
+        var requeued = 0
+        for (path, node) in index.allNodes() {
+            guard !node.isDirectory, !queuedPaths.contains(path) else { continue }
+            let unfinished: Bool
+            if let parts = node.parts {
+                unfinished = parts.isEmpty || parts.contains { $0.driveFileId == nil || $0.accountEmail.isEmpty }
+            } else {
+                unfinished = true
+            }
+            guard unfinished else { continue }
+            journal.enqueue(.uploadFile(path: path))
+            requeued += 1
+        }
+        if requeued > 0 {
+            AppLog.log("sync", "🩹 Xếp lại \(requeued) file chưa upload xong vào hàng đợi")
+        }
+    }
 
     /// File tồn tại ở mirror nhưng chưa có trong index → đăng ký upload
     /// (tự xử lý trường hợp người dùng kéo file vào mirror qua USB File Sharing).
