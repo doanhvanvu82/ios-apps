@@ -96,6 +96,10 @@ struct SharedFilesView: View {
                 Button(selected.isEmpty ? "Chọn tất cả" : "Bỏ chọn") {
                     if selected.count >= items.count { selected = [] } else { selected = Set(items.map(\.name)) }
                 }
+                Button("Xong") {
+                    selectionMode = false
+                    selected = []
+                }
             } else {
                 Button("Chọn") {
                     selectionMode = true

@@ -96,6 +96,9 @@ struct FilesView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                if isSelecting {
+                    selectionBar
+                }
             }
             .navigationTitle(path.last ?? "MyDrive")
             .navigationBarTitleDisplayMode(.inline)
@@ -207,6 +210,12 @@ struct FilesView: View {
         ToolbarItem(placement: .topBarLeading) {
             if engine.status.isWorking {
                 ProgressView()
+            } else if isSelecting {
+                Button {
+                    exitSelection()
+                } label: {
+                    Text("Xong")
+                }
             } else if searchText.isEmpty {
                 Menu {
                     ForEach(SortOption.allCases) { opt in
@@ -259,41 +268,48 @@ struct FilesView: View {
                 }
             }
         }
-        ToolbarItemGroup(placement: .bottomBar) {
-            if isSelecting {
-                Button {
-                    shareSelected()
-                } label: {
-                    Image(systemName: "square.and.arrow.up")
-                }
-                .disabled(shareableURLs.isEmpty)
-                Spacer()
-                Button {
-                    pendingMove = Array(selectedPaths)
-                } label: {
-                    Image(systemName: "folder")
-                }
-                .disabled(selectedPaths.isEmpty)
-                Spacer()
-                Button {
-                    pendingCopy = Array(selectedPaths)
-                } label: {
-                    Image(systemName: "doc.on.doc")
-                }
-                .disabled(selectedPaths.isEmpty)
-                Spacer()
-                Text("\(selectedPaths.count) mục")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button(role: .destructive) {
-                    confirmDeleteSelection = true
-                } label: {
-                    Image(systemName: "trash")
-                }
-                .disabled(selectedPaths.isEmpty)
+    }
+
+    /// Thanh hành động khi chọn nhiều — view thường dưới List (KHÔNG dùng
+    /// toolbar .bottomBar: bị đè lên tab bar như bug đã gặp).
+    private var selectionBar: some View {
+        HStack(spacing: 20) {
+            Button {
+                shareSelected()
+            } label: {
+                Image(systemName: "square.and.arrow.up")
             }
+            .disabled(shareableURLs.isEmpty)
+            Spacer()
+            Button {
+                pendingMove = Array(selectedPaths)
+            } label: {
+                Image(systemName: "folder")
+            }
+            .disabled(selectedPaths.isEmpty)
+            Spacer()
+            Button {
+                pendingCopy = Array(selectedPaths)
+            } label: {
+                Image(systemName: "doc.on.doc")
+            }
+            .disabled(selectedPaths.isEmpty)
+            Spacer()
+            Text("\(selectedPaths.count) mục")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button(role: .destructive) {
+                confirmDeleteSelection = true
+            } label: {
+                Image(systemName: "trash")
+            }
+            .disabled(selectedPaths.isEmpty)
         }
+        .font(.system(size: 20))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.bar)
     }
 
     // MARK: - Danh sách (sắp xếp / tìm kiếm)
