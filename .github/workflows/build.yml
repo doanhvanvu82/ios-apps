@@ -1,0 +1,195 @@
+name: Build apps & mods
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'source/**'
+      - '**.md'
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: 'Phạm vi build'
+        type: choice
+        options: [all, apps, mods]
+        default: all
+      only:
+        description: 'Chỉ build một mục (tên thư mục, để trống = tất cả)'
+        type: string
+        default: ''
+      clean:
+        description: 'Build lại từ đầu (xóa cache)'
+        type: boolean
+        default: false
+      publish:
+        description: 'Publish source.json + IPA lên GitHub Releases (chỉ main)'
+        type: boolean
+        default: false
+
+# Ghi source.json + upload release khi publish=true.
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Chạy trên runner tự đăng ký bằng cách đặt repo variable BUILD_RUNNER
+  # (vd: self-hosted). Mặc định là macOS GitHub-hosted (có Xcode + SDK sẵn).
+  SCOPE: ${{ inputs.scope || 'all' }}
+  ONLY: ${{ inputs.only || '' }}
+  CLEAN: ${{ inputs.clean && '1' || '0' }}
+  CONTINUE_ON_ERROR: '1'
+  # IPA nguồn cho mods (repo không chứa): đặt secret YOUTUBE_IPA_URL.
+  IPA_URL: ${{ secrets.YOUTUBE_IPA_URL }}
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  build:
+    runs-on: ${{ vars.BUILD_RUNNER || 'macos-latest' }}
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Danh sách loại trừ
+        id: exclude
+        shell: bash
+        run: |
+          file=build-exclude.txt
+          echo "--- $file ---"
+          if [ -f "$file" ]; then
+            sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$file"
+          else
+            echo "(không có file — build tất cả)"
+          fi
+
+      - name: Chuẩn bị toolchain (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v swiftc >/dev/null || { echo "❌ thiếu Swift"; exit 1; }
+          echo "→ Swift: $(swiftc --version | head -1)"
+          xcode-select -p
+          # macOS có sẵn iOS SDK; kiểm tra để báo lỗi sớm.
+          xcrun -sdk iphoneos --show-sdk-path
+          if ! command -v xtool >/dev/null; then
+            brew install xtool-org/tap/xtool
+          fi
+          echo "xtool=$(command -v xtool)"
+          xtool --version || true
+          echo "XTOOL=xtool" >> "$GITHUB_ENV"
+          # Python + Pillow (patch_icon.sh) và zip.
+          python3 -m pip install --quiet --break-system-packages Pillow || \
+            python3 -m pip install --quiet Pillow
+          command -v zip >/dev/null || brew install zip
+
+      - name: Chuẩn bị toolchain (Linux, runner tự đăng ký)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOOLCHAIN="${IOS_TOOLCHAIN:-$HOME/swift-dev}"
+          if [ ! -x "$TOOLCHAIN/usr/bin/swiftc" ]; then
+            echo "❌ Runner Linux cần Swift toolchain + Darwin SDK."
+            echo "   Cài theo AGENTS.md rồi đặt IOS_TOOLCHAIN nếu không nằm ở ~/swift-dev."
+            exit 1
+          fi
+          export PATH="$TOOLCHAIN/usr/bin:$PATH"
+          swiftc --version | head -1
+          SDK_BUNDLE="$HOME/.swiftpm/swift-sdks/darwin.artifactbundle"
+          if [ ! -d "$SDK_BUNDLE" ]; then
+            if [ -n "${DARWIN_SDK_URL:-}" ]; then
+              echo "→ tải Darwin SDK từ DARWIN_SDK_URL…"
+              mkdir -p "$(dirname "$SDK_BUNDLE")"
+              curl -fL --retry 3 -o /tmp/darwin.xtoolsdk "$DARWIN_SDK_URL"
+              "$TOOLCHAIN/usr/bin/xtool" sdk install /tmp/darwin.xtoolsdk --slim 2>/dev/null || \
+                xtool sdk install /tmp/darwin.xtoolsdk --slim
+            else
+              echo "❌ Thiếu Darwin SDK. Build từ Xcode.xip là bước riêng của máy:"
+              echo "   xtool sdk install /path/Xcode.xip   (hoặc đặt biến DARWIN_SDK_URL)"
+              exit 1
+            fi
+          fi
+          if [ ! -x toolkit/xtool.AppImage ]; then
+            echo "→ tải xtool AppImage…"
+            curl -fL -o toolkit/xtool.AppImage \
+              "https://github.com/xtool-org/xtool/releases/download/1.22.2/xtool-$(uname -m).AppImage"
+            chmod +x toolkit/xtool.AppImage
+          fi
+          python3 -m pip install --quiet Pillow || true
+          # Mod cần zip/unzip; AdsBlocker cần node để sinh bộ lọc. Cài nếu thiếu
+          # (runner tự đăng ký thường có sẵn apt).
+          command -v zip >/dev/null || sudo apt-get install -y zip || true
+          command -v unzip >/dev/null || sudo apt-get install -y unzip || true
+          command -v node >/dev/null || sudo apt-get install -y nodejs || true
+
+      - name: Kiểm tra dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v python3 zip unzip
+          python3 -c 'import PIL; print("Pillow", PIL.__version__)'
+          command -v node >/dev/null && node --version || echo "⚠️ thiếu node (AdsBlocker bỏ qua bộ lọc mới)"
+
+      - name: Build apps & mods
+        shell: bash
+        env:
+          DARWIN_SDK_URL: ${{ vars.DARWIN_SDK_URL }}
+        run: |
+          set -euo pipefail
+          chmod +x toolkit/build_all.sh mods/*/build.sh
+          ./toolkit/build_all.sh "$SCOPE"
+
+      - name: Liệt kê IPA
+        if: always()
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(apps/*/xtool/*.ipa mods/*/out/*.ipa)
+          [ ${#files[@]} -gt 0 ] || { echo "⚠️ không có IPA"; exit 0; }
+          printf '%s  %s\n' "$(du -h "${files[@]}" 2>/dev/null | cut -f1)" "${files[@]}" 2>/dev/null || ls -lh "${files[@]}"
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipa-${{ github.run_number }}
+          path: |
+            apps/*/xtool/*.ipa
+            mods/*/out/*.ipa
+          if-no-files-found: warn
+          retention-days: 30
+
+  # Chỉ chạy khi bấm workflow_dispatch với publish=true trên main.
+  publish:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Tải IPA đã build
+        uses: actions/download-artifact@v4
+        with:
+          name: ipa-${{ github.run_number }}
+          path: dist
+          merge-multiple: true
+
+      - name: Publish source + release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DIST_DIR: dist
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          ls -lh dist
+          ./toolkit/publish_github.sh

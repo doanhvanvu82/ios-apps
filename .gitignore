@@ -27,8 +27,12 @@ sidestore/
 source/*.ipa
 source/*.png
 
-# --- Mods game: làm & build IPA riêng ở local, KHÔNG lên GitHub (nặng ~1,4 GB) ---
-mods/
+# --- Mods: chỉ commit mã nguồn; output + IPA gốc + cấu hình máy thì không ---
+mods/*/work/
+mods/*/out/
+mods/*/source.env
+# IPA gốc / đã giải mã (YouTube, Cherry Tale…) không commit
+/*.ipa
 
 # --- OS ---
 .DS_Store

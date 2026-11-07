@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Sinh "source" AltStore (Ksign đọc được) chung cho mọi app trong apps/.
+"""Sinh "source" AltStore (Ksign đọc được) chung cho mọi app trong apps/ + mods/.
 
     python3 toolkit/sidestore_source.py [base-url] [--source-url URL]
     python3 toolkit/sidestore_source.py --print-base
 
-Quét apps/*/xtool/*.ipa (bản build gần nhất của từng app). Kết quả trong thư mục
+Quét apps/*/xtool/*.ipa + mods/*/out/*.ipa (bản build gần nhất của từng mục). Kết quả trong thư mục
 SOURCE_OUT (mặc định sidestore/):
     source.json            ← thêm URL này vào Ksign (1 lần, dùng cho mọi app)
     <App>.png              ← icon lấy từ IPA
@@ -42,12 +42,42 @@ def lan_ip():
         s.close()
 
 
+ICON_CANDIDATES = (
+    "AppIcon60x60@3x.png",
+    "AppIcon60x60@2x.png",
+    "AppIcon76x76@2x~ipad.png",
+    "Icon-60@3x.png",
+    "Icon-60@2x.png",
+    "icon1@3x.png",
+    "icon1@2x.png",
+    "icon1.png",
+    "AppIcon.png",
+)
+
+
+def read_icon(z, app_dir, names):
+    for name in ICON_CANDIDATES:
+        if app_dir + name in names:
+            return z.read(app_dir + name)
+    # App dùng asset catalog nhưng có icon rời (vd YouTube: icon1/2/3@Nx).
+    # Ưu tiên bản @3x, rồi @2x, rồi bản thường; sắp xếp để kết quả ổn định.
+    loose = sorted(n for n in names
+                   if n.startswith(app_dir) and "/" not in n[len(app_dir):]
+                   and "icon" in n.lower() and n.endswith(".png"))
+    for suffix in ("@3x.png", "@2x.png", ".png"):
+        for name in loose:
+            if name.endswith(suffix):
+                return z.read(name)
+    return None
+
+
 def app_entry(ipa, base, now):
     with zipfile.ZipFile(ipa) as z:
+        names = set(z.namelist())
         app_dir = next(n for n in z.namelist()
                        if n.startswith("Payload/") and n.endswith(".app/Info.plist"))[:-len("Info.plist")]
         info = plistlib.loads(z.read(app_dir + "Info.plist"))
-        icon = z.read(app_dir + "AppIcon60x60@2x.png")
+        icon = read_icon(z, app_dir, names)
     name = info.get("CFBundleDisplayName") or info["CFBundleName"]
     file_stem = name.replace(" ", "")
     version = info["CFBundleShortVersionString"]
@@ -55,10 +85,14 @@ def app_entry(ipa, base, now):
 
     for old in glob.glob(os.path.join(OUT, f"{file_stem}-*.ipa")):
         os.remove(old)
-    ipa_name = f"{file_stem}-{version}.ipa"
+    # Mod giữ nguyên version app (vd YouTube 21.44.4) và chỉ tăng build — thêm
+    # build vào tên file để Ksign không dùng cache bản cũ.
+    suffix = version if str(build) == str(version) else f"{version}-{build}"
+    ipa_name = f"{file_stem}-{suffix}.ipa"
     shutil.copyfile(ipa, os.path.join(OUT, ipa_name))
-    with open(os.path.join(OUT, f"{file_stem}.png"), "wb") as fh:
-        fh.write(icon)
+    if icon:
+        with open(os.path.join(OUT, f"{file_stem}.png"), "wb") as fh:
+            fh.write(icon)
 
     size = os.path.getsize(ipa)
     download = f"{base}/{ipa_name}"
@@ -68,7 +102,7 @@ def app_entry(ipa, base, now):
         "developerName": "vudv",
         "subtitle": "Bản build từ máy tính",
         "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
-        "iconURL": f"{base}/{file_stem}.png",
+        "iconURL": f"{base}/{file_stem}.png" if icon else "",
         "tintColor": "#738CFF",
         # Định dạng cũ (AltStore 1.x / SideStore cũ)
         "version": version,
@@ -89,12 +123,45 @@ def app_entry(ipa, base, now):
     }
 
 
+def collect_ipas():
+    """IPA cần đưa vào source: apps/*/xtool/*.ipa + mods/*/out/*.ipa.
+
+    --dist DIR (hoặc DIST_DIR) thay cho quét repo — dùng khi CI tải artifact về
+    một thư mục phẳng.
+    """
+    dist = os.environ.get("DIST_DIR")
+    args = sys.argv[1:]
+    if "--dist" in args:
+        dist = args[args.index("--dist") + 1]
+    if dist:
+        return sorted(glob.glob(os.path.join(dist, "*.ipa")), key=os.path.getmtime)
+
+    ipas = []
+    for area in ("apps", "mods"):
+        for entry in sorted(glob.glob(os.path.join(ROOT, area, "*"))):
+            for sub in ("xtool", "out"):
+                found = sorted(glob.glob(os.path.join(entry, sub, "*.ipa")),
+                               key=os.path.getmtime)
+                if found:
+                    ipas.append(found[-1])
+                    break
+    return ipas
+
+
 def main():
     args = sys.argv[1:]
     if args == ["--print-base"]:
         print(f"http://{lan_ip()}:{PORT}")
         return
     positional = [a for a in args if not a.startswith("--")]
+    # Bỏ giá trị đi kèm --dist/--source-url khỏi danh sách positional.
+    skip = set()
+    for name in ("--dist", "--source-url"):
+        if name in args:
+            i = args.index(name)
+            skip.add(i)
+            skip.add(i + 1)
+    positional = [a for i, a in enumerate(args) if not a.startswith("--") and i not in skip]
     base = positional[0] if positional else f"http://{lan_ip()}:{PORT}"
     source_url = f"{base}/source.json"
     if "--source-url" in args:
@@ -103,10 +170,8 @@ def main():
     now = datetime.now(timezone.utc)
 
     apps = []
-    for app_dir in sorted(glob.glob(os.path.join(ROOT, "apps", "*"))):
-        ipas = sorted(glob.glob(os.path.join(app_dir, "xtool", "*.ipa")), key=os.path.getmtime)
-        if ipas:
-            apps.append(app_entry(ipas[-1], base, now))
+    for ipa in collect_ipas():
+        apps.append(app_entry(ipa, base, now))
 
     source = {
         "name": "iOS apps (máy nhà)",

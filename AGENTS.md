@@ -12,7 +12,8 @@ không giới hạn số app / App ID như Apple ID miễn phí). Không làm đ
 │   ├── build_app.sh <app> [clean]  — pipeline build: toolchain → sync SDK → bump version → xtool → icon → source/serve
 │   ├── bump_version.sh <app>       — tăng <app>/VERSION, ghi vào <app>/Info.plist
 │   ├── patch_icon.sh <ipa> <png>   — chèn icon (resize từ 1024×1024) vào IPA
-│   ├── sidestore_source.py         — gộp apps/*/xtool/*.ipa thành sidestore/source.json
+│   ├── build_all.sh [apps|mods]    — build mọi app + mod, bỏ qua mục trong build-exclude.txt
+│   ├── sidestore_source.py         — gộp apps/*/xtool/*.ipa + mods/*/out/*.ipa thành sidestore/source.json
 │   ├── dev_server.py, serve_sidestore.sh [stop] — server LAN port 8765 (+ POST /clipboard; POST /log → .state/iphone_log.txt)
 │   ├── publish_github.sh [--dry-run] — sinh source.json trỏ GitHub Releases + push + upload IPA (URL cố định cho Ksign)
 │   ├── pull_app_logs.sh <bundleID> — iPhone cắm USB: chép Documents/Logs của app → .state/logs/<bundleID>/ (cần ifuse)
@@ -21,13 +22,21 @@ không giới hạn số app / App ID như Apple ID miễn phí). Không làm đ
 ├── sidestore/               — output phục vụ LAN (sinh tự động, đừng sửa tay)
 ├── source/                  — source.json đã publish lên GitHub (sinh bởi publish_github.sh)
 ├── .state/                  — pid/log server, iphone_clipboard.txt
-└── apps/<App>/              — mỗi app một thư mục
+├── build-exclude.txt        — tên/đường dẫn KHÔNG build tự động (CI + build_all.sh)
+├── .github/workflows/build.yml — CI build app + mod, upload IPA artifact (publish tay)
+├── apps/<App>/              — mỗi app một thư mục
+└── mods/<Mod>/              — mod IPA có sẵn (tiêm dylib), pipeline riêng
 ```
 
 App hiện có: `apps/GameHub` (chơi game PC trên iPhone; dữ liệu build game nằm trong `apps/GameHub/workspace/`),
 `apps/AdsBlocker` (Safari Web Extension chặn quảng cáo),
 `apps/Mangalate` (Safari Web Extension dịch truyện tranh: Vision OCR trên máy, chỉ gửi text lên Gemini, dán bản dịch
-đè lên bong bóng thoại).
+đè lên bong bóng thoại),
+`apps/MyDrive` (client Google Drive: upload nền bằng background URLSession, đồng bộ thư mục).
+
+Mod: `mods/youtube` (chặn quảng cáo + phát nền/PiP cho YouTube 21.44.4: tiêm dylib ObjC++ vào IPA đã giải mã),
+`mods/cherrytale` (game IL2CPP — mod tĩnh, **loại trừ** khỏi build tự động/CI). Mod cần IPA gốc (không nằm trong repo):
+`IPA=/đường/dẫn/…` hoặc `IPA_URL=…` (file `mods/<mod>/source.env`, không commit). Chi tiết: `mods/youtube/README.md`.
 
 ## Môi trường build (đã cài sẵn)
 
@@ -59,6 +68,26 @@ vẫn là số build tăng dần (Ksign dựa vào đó để nhận cập nhậ
 
 Build: `apps/<App>/build.sh` (lần đầu hoặc sau khi di chuyển thư mục: `build.sh clean`). Kết quả `apps/<App>/xtool/<Product>.ipa`,
 `sidestore/source.json` tự có app mới, server LAN tự bật.
+
+## Mod IPA (tiêm dylib)
+
+`mods/<Mod>/` là mod cho IPA **có sẵn** (không build từ SwiftPM): pipeline riêng trong `mods/<Mod>/build.sh`
+(giải nén IPA → biên dịch dylib arm64 bằng clang + Darwin SDK → chèn `LC_LOAD_DYLIB` → sửa Info.plist → ký `ldid` → zip).
+IPA gốc không nằm trong repo: đặt `IPA=/đường/dẫn/…` hoặc `IPA_URL=…` trong `mods/<Mod>/source.env` (không commit).
+
+```bash
+mods/youtube/build.sh          # → mods/youtube/out/YouTube_mod_<ver>.ipa (+ .deb)
+mods/youtube/build.sh --check  # exit 3 nếu thiếu IPA gốc (build_all.sh dùng để skip)
+```
+
+- **Không vá code trong `__TEXT`**: bản ký Ksign có `CS_HARD|CS_KILL` — sửa code sau khi ký thì kernel giết app.
+  Hook bằng method swizzling ObjC runtime trong dylib; chỉ chèn `LC_LOAD_DYLIB` vào **padding header**
+  (`tools/inject_dylib.py`), không dựng lại `__LINKEDIT` (LIEF `add_library` làm hỏng bind/chained fixups của app lớn).
+- `toolkit/build_all.sh [apps|mods]` build mọi app + mod; `build-exclude.txt` (gốc repo) loại trừ mục không build tự động
+  (hiện: `cherrytale` — cần IPA 1,4 GB + dump.cs sinh trên máy).
+- CI: `.github/workflows/build.yml` build app + mod, upload artifact `ipa-<run>`; publish tay bằng workflow_dispatch
+  (`publish=true`, dùng `secrets.YOUTUBE_IPA_URL`).
+- Log trên máy: dylib ghi `Documents/Logs/<ngày>.log`, lấy bằng `toolkit/pull_app_logs.sh <bundleID>`.
 
 ## Cài lên iPhone
 

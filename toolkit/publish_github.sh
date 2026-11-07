@@ -34,7 +34,11 @@ OUT_DIR=.state/publish
 # ---------------------------------------------------------------------------
 echo "→ Sinh source.json (base: $BASE)…"
 rm -rf "$OUT_DIR"
-SOURCE_OUT="$OUT_DIR" python3 toolkit/sidestore_source.py "$BASE" --source-url "$SOURCE_URL"
+DIST_ARGS=()
+if [ -n "${DIST_DIR:-}" ]; then
+    DIST_ARGS=(--dist "$DIST_DIR")
+fi
+SOURCE_OUT="$OUT_DIR" python3 toolkit/sidestore_source.py "$BASE" --source-url "$SOURCE_URL" "${DIST_ARGS[@]}"
 
 mkdir -p source
 cp "$OUT_DIR/source.json" source/source.json

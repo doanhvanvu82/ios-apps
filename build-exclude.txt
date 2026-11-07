@@ -1,0 +1,9 @@
+# Danh sách KHÔNG build (toolkit/build_all.sh + GitHub Actions đọc file này).
+#
+# Mỗi dòng: tên thư mục (`cherrytale`) hoặc đường dẫn (`mods/cherrytale`).
+# Dòng bắt đầu bằng # là ghi chú. Mục bị loại trừ được báo "skip", không phải lỗi.
+#
+# Cherry Tale: mod game IL2CPP cần IPA gốc 1,4 GB + dump.cs sinh từ UnityFramework
+# trên máy; pipeline riêng dùng hook tĩnh vá binary, không phù hợp build CI.
+
+cherrytale

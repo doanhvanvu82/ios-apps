@@ -25,12 +25,13 @@ cd "$APP_DIR"
 # 6.4.1 (clang 21) nên không đủ — phải dùng development snapshot (clang 23).
 # ---------------------------------------------------------------------------
 TOOLCHAIN="${IOS_TOOLCHAIN:-$HOME/swift-dev}"
-if [ ! -x "$TOOLCHAIN/usr/bin/swiftc" ]; then
-    echo "❌ Không tìm thấy Swift toolchain tại $TOOLCHAIN" >&2
+if [ -x "$TOOLCHAIN/usr/bin/swiftc" ]; then
+    export PATH="$TOOLCHAIN/usr/bin:$PATH"
+elif ! command -v swiftc >/dev/null 2>&1; then
+    echo "❌ Không tìm thấy Swift toolchain tại $TOOLCHAIN (và swiftc không có trong PATH)" >&2
     echo "   Đặt IOS_TOOLCHAIN=/path/to/swift để chỉ định toolchain khác." >&2
     exit 1
 fi
-export PATH="$TOOLCHAIN/usr/bin:$PATH"
 echo "→ Toolchain: $(swiftc --version | head -1)"
 
 # ---------------------------------------------------------------------------
@@ -75,6 +76,14 @@ echo "→ Đánh version…"
 # 5. Build
 # ---------------------------------------------------------------------------
 XTOOL="${XTOOL:-$TOOLKIT/xtool.AppImage}"
+if [ ! -x "$XTOOL" ] && command -v xtool >/dev/null 2>&1; then
+    # macOS (Xcode) hoặc máy đã cài xtool qua brew: dùng bản trong PATH.
+    XTOOL="$(command -v xtool)"
+fi
+if [ ! -x "$XTOOL" ]; then
+    echo "❌ Không thấy xtool tại $XTOOL (đặt XTOOL=/path/to/xtool hoặc cài xtool trong PATH)." >&2
+    exit 1
+fi
 echo "→ Building với $XTOOL…"
 "$XTOOL" dev build --ipa
 
@@ -95,4 +104,7 @@ ls -lh "$IPA"
 # ---------------------------------------------------------------------------
 echo
 python3 "$TOOLKIT/sidestore_source.py"
-"$TOOLKIT/serve_sidestore.sh"
+# CI (GitHub Actions) không cần server LAN — tránh setsid (không có trên macOS).
+if [ -z "${CI:-}" ]; then
+    "$TOOLKIT/serve_sidestore.sh"
+fi
