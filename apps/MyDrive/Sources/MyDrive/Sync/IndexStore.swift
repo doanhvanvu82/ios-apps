@@ -36,8 +36,8 @@ final class IndexStore: ObservableObject {
     private let queue = DispatchQueue(label: "vn.vudv.mydrive.index")
 
     private init() {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        metaDir = docs.appendingPathComponent(".myd-meta", isDirectory: true)
+        _ = AppPaths.migrated
+        metaDir = AppPaths.meta
         fileURL = metaDir.appendingPathComponent(Self.indexFileName)
         load()
     }

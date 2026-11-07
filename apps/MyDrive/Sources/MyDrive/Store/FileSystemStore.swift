@@ -18,13 +18,11 @@ final class FileSystemStore: ObservableObject {
     private let fm = FileManager.default
 
     init() {
-        let docs = fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        rootURL = docs.appendingPathComponent("MyDrive", isDirectory: true)
-        inboxURL = rootURL.appendingPathComponent("Inbox", isDirectory: true)
-        tmpURL = docs.appendingPathComponent(".myd-tmp", isDirectory: true)
-        try? fm.createDirectory(at: rootURL, withIntermediateDirectories: true)
-        try? fm.createDirectory(at: inboxURL, withIntermediateDirectories: true)
-        try? fm.createDirectory(at: tmpURL, withIntermediateDirectories: true)
+        _ = AppPaths.migrated
+        AppPaths.ensureDirs()
+        rootURL = AppPaths.mirror
+        inboxURL = AppPaths.inbox
+        tmpURL = AppPaths.tmp
     }
 
     /// Báo cho UI biết mirror vừa thay đổi (gọi trên main queue).
@@ -145,7 +143,7 @@ final class FileSystemStore: ObservableObject {
         guard fm.fileExists(atPath: dirURL.path) else { return [] }
         let items = try fm.contentsOfDirectory(at: dirURL, includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey])
         return items.compactMap { item in
-            guard item.lastPathComponent != ".myd-meta" else { return nil }
+            guard item.lastPathComponent != "MyDrive.meta" else { return nil }
             let values = try? item.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey])
             return Entry(
                 name: item.lastPathComponent,

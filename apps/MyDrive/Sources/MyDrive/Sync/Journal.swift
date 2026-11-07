@@ -39,7 +39,7 @@ struct JournalEntry: Codable, Hashable, Identifiable {
     }
 }
 
-/// Hàng đợi thao tác persist (Documents/.myd-meta/journal.json).
+/// Hàng đợi thao tác persist (Application Support/MyDrive.meta/journal.json).
 /// Crash-safe: ghi journal trước khi thực hiện; SyncEngine duyệt tuần tự.
 final class Journal: ObservableObject {
     static let shared = Journal()
@@ -50,10 +50,9 @@ final class Journal: ObservableObject {
     private let queue = DispatchQueue(label: "vn.vudv.mydrive.journal")
 
     private init() {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let metaDir = docs.appendingPathComponent(".myd-meta", isDirectory: true)
-        try? FileManager.default.createDirectory(at: metaDir, withIntermediateDirectories: true)
-        fileURL = metaDir.appendingPathComponent("journal.json")
+        _ = AppPaths.migrated
+        try? FileManager.default.createDirectory(at: AppPaths.meta, withIntermediateDirectories: true)
+        fileURL = AppPaths.meta.appendingPathComponent("journal.json")
         load()
     }
 

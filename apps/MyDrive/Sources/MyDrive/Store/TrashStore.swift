@@ -4,9 +4,9 @@ import Foundation
 /// vào đây, giữ 30 ngày rồi mới dọn hẳn. Trong lúc đó khôi phục (về vị trí cũ,
 /// untrash phần trên Drive) hoặc xóa ngay được.
 ///
-/// Nội dung file nằm ở thư mục ẩn Documents/.myd-trash/ (không hiện trong mirror
-/// nhưng vẫn nằm trong Documents → copy được ra máy tính qua USB nếu cần cứu).
-/// Metadata persist ở .myd-meta/trash.json — update app qua Ksign giữ nguyên.
+/// Nội dung file nằm ở Application Support/MyDrive.trash/ (Files app không thấy —
+/// vẫn nằm trong sandbox để restore sau update app qua Ksign).
+/// Metadata persist ở MyDrive.meta/trash.json — update app qua Ksign giữ nguyên.
 final class TrashStore: ObservableObject {
     static let shared = TrashStore()
 
@@ -39,10 +39,9 @@ final class TrashStore: ObservableObject {
     private let trashDir: URL
 
     private init() {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let metaDir = docs.appendingPathComponent(".myd-meta", isDirectory: true)
-        fileURL = metaDir.appendingPathComponent("trash.json")
-        trashDir = docs.appendingPathComponent(".myd-trash", isDirectory: true)
+        _ = AppPaths.migrated
+        fileURL = AppPaths.meta.appendingPathComponent("trash.json")
+        trashDir = AppPaths.trash
         try? FileManager.default.createDirectory(at: trashDir, withIntermediateDirectories: true)
         load()
         purgeExpired()

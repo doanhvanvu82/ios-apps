@@ -86,7 +86,7 @@ struct FilesView: View {
             .alert("Hộp thư Inbox", isPresented: $showInboxHint) {
                 Button("Đã hiểu") {}
             } message: {
-                Text("Cắm iPhone vào máy tính → Tệp (hoặc Finder) → MyDrive → kéo file vào thư mục MyDrive/Inbox. App sẽ tự nhập và đồng bộ các file này.")
+                Text("Cắm iPhone vào máy tính → Tệp (hoặc Finder) → MyDrive → kéo file vào thư mục Inbox. App sẽ tự nhập và đồng bộ các file này.")
             }
             .sheet(isPresented: $showPHPicker) {
                 PhotoPicker { items in importPhotos(items) }

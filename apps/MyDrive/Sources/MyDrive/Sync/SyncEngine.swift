@@ -607,7 +607,7 @@ final class SyncEngine: ObservableObject {
         let fileCount = scanned.files.count
 
         if fileCount > 0 {
-            // Index mất nhưng mirror còn (index.json hỏng / xóa nhầm .myd-meta):
+            // Index mất nhưng mirror còn (index.json hỏng / xóa nhầm MyDrive.meta):
             // KHÔNG nạp index cũ đè lên — để adoptOrphanLocalFiles() nhận nuôi file local.
             AppLog.log("sync", "ℹ️ Index rỗng nhưng mirror có \(fileCount) file — sẽ nhận nuôi các file này")
             return
