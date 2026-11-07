@@ -20,7 +20,7 @@ struct MyDriveApp: App {
 }
 
 /// AppDelegate: nhận file từ share sheet/"Open in MyDrive" (nhận được trong
-/// didFinishLaunching qua userActivity khi app mở lần đầu).
+/// didFinishLaunching qua userActivity khi app mở lần đầu); nối transfer nền.
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(
         _ application: UIApplication,
@@ -36,5 +36,16 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     ) -> Bool {
         InboxImporter.handleIncomingURL(url)
         return true
+    }
+
+    /// iOS đánh thức app (kể cả khi đã bị kill) khi upload nền xong — giữ
+    /// completion, BackgroundUploader dựng lại session xong sẽ gọi lại.
+    func application(
+        _ application: UIApplication,
+        handleEventsForBackgroundURLSession identifier: String,
+        completionHandler: @escaping () -> Void
+    ) {
+        BackgroundUploader.pendingCompletion = completionHandler
+        _ = BackgroundUploader.shared   // ép dựng session + loadJobs
     }
 }

@@ -138,4 +138,16 @@ final class IndexStore: ObservableObject {
         replaceAll(nodes: nodes, rev: remoteRev)
         return true
     }
+
+    /// Cập nhật 1 part của node (upload nền xong) — không bump rev.
+    func updatePart(path: String, partIndex: Int, accountEmail: String, driveFileId: String) {
+        update(path: path) { node in
+            guard var parts = node.parts else { return }
+            for i in parts.indices where parts[i].index == partIndex {
+                parts[i].driveFileId = driveFileId
+                parts[i].accountEmail = accountEmail
+            }
+            node.parts = parts
+        }
+    }
 }

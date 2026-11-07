@@ -302,6 +302,43 @@ final class DriveClient {
         }
     }
 
+    /// Mở session resumable rồi GIAO file cho background URLSession (daemon
+    /// nsurlsessiond upload — kill app vẫn chạy). Trả true nếu đã giao nền.
+    func startBackgroundUpload(fileURL: URL, name: String, parentID: String, appProperties: [String: String]?, path: String, partIndex: Int, partSize: Int64) async throws -> Bool {
+        let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path)
+        let totalSize = (attrs[.size] as? NSNumber)?.int64Value ?? 0
+        var meta: [String: Any] = ["name": name, "parents": [parentID]]
+        if let appProperties { meta["appProperties"] = appProperties }
+        let metaJSON = try JSONSerialization.data(withJSONObject: meta)
+
+        var initReq = URLRequest(url: URL(string: "\(Self.uploadBase)/files?uploadType=resumable&fields=id,name,mimeType,size")!)
+        let token = try await tokens.validAccessToken(for: account)
+        initReq.httpMethod = "POST"
+        initReq.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        initReq.setValue("application/json; charset=UTF-8", forHTTPHeaderField: "Content-Type")
+        initReq.setValue("\(totalSize)", forHTTPHeaderField: "X-Upload-Content-Length")
+        initReq.setValue("application/octet-stream", forHTTPHeaderField: "X-Upload-Content-Type")
+        initReq.httpBody = metaJSON
+        let (initData, initResp) = try await session.data(for: initReq)
+        guard let httpInit = initResp as? HTTPURLResponse, httpInit.statusCode == 200,
+              let uploadURL = httpInit.value(forHTTPHeaderField: "Location") else {
+            let status = (initResp as? HTTPURLResponse)?.statusCode ?? 0
+            throw DriveError.parse(status: status, data: initData)
+        }
+
+        BackgroundUploader.shared.start(job: .init(
+            email: account.email,
+            path: path,
+            partIndex: partIndex,
+            partSize: totalSize,
+            remoteName: name,
+            uploadURL: uploadURL,
+            fileURL: fileURL.path,
+            createdAt: Date()
+        ))
+        return true
+    }
+
     /// Hỏi trạng thái session resumable: server trả Range: bytes=0-N đã nhận.
     /// Trả -1 nếu session đã hoàn tất (server trả 200/201 kèm file JSON).
     private func queryResumableAcked(uploadURL: String, totalSize: Int64) async throws -> Int64 {
