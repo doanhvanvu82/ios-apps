@@ -5,33 +5,62 @@ import UIKit
 import UniformTypeIdentifiers
 
 /// QuickLook preview (ảnh/video/pdf/text…).
-/// QLPreviewController nhúng trần vào .sheet thì KHÔNG có nút Done (không cách
-/// nào đóng, vuốt-xuống bị cử chỉ media nuốt) — phải bọc trong
-/// UINavigationController thì QL tự thêm nút "Xong" để dismiss.
+/// - Nhiều file → QL tự cho vuốt trái/phải chuyển giữa các file (như app Files).
+/// - QLPreviewController CHỈ tự thêm nút Done khi chính nó được present modal;
+///   nhúng vào .sheet (kể cả qua UINavigationController) thì KHÔNG → tự thêm
+///   nút "Xong" vào navigation bar, bấm gọi onDone để đóng sheet.
+/// - QL không có API chọn item ban đầu → xoay mảng để file đang bấm đứng đầu
+///   (vuốt phải = file kế tiếp trong danh sách, như Files).
 struct QuickLookView: UIViewControllerRepresentable {
-    let url: URL
+    let urls: [URL]
+    var startIndex: Int = 0
+    var onDone: () -> Void
+
+    /// Thứ tự item: xoay từ startIndex về đầu (QL luôn mở item 0).
+    private var orderedURLs: [URL] {
+        guard !urls.isEmpty else { return urls }
+        let i = min(max(0, startIndex), urls.count - 1)
+        return Array(urls[i...] + urls[..<i])
+    }
 
     func makeUIViewController(context: Context) -> UINavigationController {
+        context.coordinator.items = orderedURLs
+        context.coordinator.onDone = onDone
         let vc = QLPreviewController()
         vc.dataSource = context.coordinator
+        vc.navigationItem.rightBarButtonItem = UIBarButtonItem(
+            title: "Xong", style: .done,
+            target: context.coordinator, action: #selector(Coordinator.doneTapped)
+        )
         return UINavigationController(rootViewController: vc)
     }
 
     func updateUIViewController(_ nav: UINavigationController, context: Context) {
-        context.coordinator.url = url
-        (nav.viewControllers.first as? QLPreviewController)?.reloadData()
+        let coordinator = context.coordinator
+        coordinator.onDone = onDone
+        let order = orderedURLs
+        if coordinator.items != order {
+            coordinator.items = order
+            (nav.viewControllers.first as? QLPreviewController)?.reloadData()
+        }
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator(url: url) }
+    func makeCoordinator() -> Coordinator { Coordinator(items: orderedURLs, onDone: onDone) }
 
     final class Coordinator: NSObject, QLPreviewControllerDataSource {
-        var url: URL
-        init(url: URL) { self.url = url }
+        var items: [URL]
+        var onDone: () -> Void
+        init(items: [URL], onDone: @escaping () -> Void) {
+            self.items = items
+            self.onDone = onDone
+        }
 
-        func numberOfPreviewItems(in controller: QLPreviewController) -> Int { 1 }
+        @objc func doneTapped() { onDone() }
+
+        func numberOfPreviewItems(in controller: QLPreviewController) -> Int { items.count }
 
         func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
-            url as QLPreviewItem
+            items[max(0, min(index, items.count - 1))] as QLPreviewItem
         }
     }
 }

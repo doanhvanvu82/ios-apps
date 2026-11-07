@@ -22,6 +22,7 @@ struct FilesView: View {
     @State private var renameTarget: FileSystemStore.Entry?
     @State private var moveTarget: FileSystemStore.Entry?
     @State private var previewURL: URL?
+    @State private var previewURLs: [URL] = []
     @State private var shareURL: URL?
     @State private var showTrash = false
 
@@ -124,8 +125,12 @@ struct FilesView: View {
             }
             .sheet(isPresented: Binding(get: { previewURL != nil }, set: { if !$0 { previewURL = nil } })) {
                 if let url = previewURL {
-                    QuickLookView(url: url)
-                        .ignoresSafeArea()
+                    QuickLookView(
+                        urls: previewURLs,
+                        startIndex: previewURLs.firstIndex(of: url) ?? 0,
+                        onDone: { previewURL = nil }
+                    )
+                    .ignoresSafeArea()
                 }
             }
             .sheet(isPresented: Binding(get: { shareURL != nil }, set: { if !$0 { shareURL = nil } })) {
@@ -198,6 +203,11 @@ struct FilesView: View {
                 Button {
                     let url = store.url(for: childPath)
                     if FileManager.default.fileExists(atPath: url.path) {
+                        // Danh sách file cùng thư mục (đã tải về) → vuốt trái/phải
+                        // chuyển file trong QuickLook như app Files.
+                        previewURLs = entries
+                            .filter { !$0.isDirectory && FileManager.default.fileExists(atPath: store.url(for: path + [$0.name]).path) }
+                            .map { store.url(for: path + [$0.name]) }
                         previewURL = url
                     } else {
                         // File chưa tải về (mới khôi phục) — bảo engine kéo về trước.
