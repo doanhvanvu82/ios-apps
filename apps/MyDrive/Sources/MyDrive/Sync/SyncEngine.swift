@@ -226,6 +226,7 @@ final class SyncEngine: ObservableObject {
 
     /// Xử lý 1 entry.
     private func processEntry(_ entry: JournalEntry, rootIDs: [String: String]) async throws {
+        let rawOp = try JSONEncoder().encode(entry.op)
         switch entry.op {
         case let .uploadFile(path):
             try await uploadFile(path: path)
@@ -235,8 +236,10 @@ final class SyncEngine: ObservableObject {
             try await renameOrMove(from: from, to: to, rootIDs: rootIDs)
         case let .move(from, to):
             try await renameOrMove(from: from, to: to, rootIDs: rootIDs)
-        case let .delete(path, snapshot):
-            try await deleteFile(path: path, snapshot: snapshot)
+        case let .delete(path, _):
+            try await deleteFile(path: path, rawSnapshot: rawOp)
+        case let .restoreTrash(path, _):
+            try await restoreTrashed(path: path, rawSnapshot: rawOp)
         }
     }
 
@@ -249,6 +252,70 @@ final class SyncEngine: ObservableObject {
             }
             try await uploadFile(path: path)
             journal.complete(entry)
+        }
+    }
+
+    // MARK: - Xóa / khôi phục (Đã xóa gần đây)
+
+    /// Snapshot đi kèm op delete/restoreTrash: bản mới là TrashSnapshot; op cũ
+    /// (bản app trước) chỉ mã hoá IndexNode — nhận cả hai để op chờ dở không chết.
+    private func snapshot(from raw: Data) -> TrashSnapshot? {
+        if let snap = try? JSONDecoder().decode(TrashSnapshot.self, from: raw) {
+            return snap
+        }
+        if let node = try? JSONDecoder().decode(IndexNode.self, from: raw) {
+            return TrashSnapshot(root: node, children: [:])
+        }
+        return nil
+    }
+
+    /// Xóa: trash các part của root + con trên Drive (thùng rác Drive giữ 30 ngày,
+    /// khớp với thùng rác local — khôi phục sẽ untrash lại). Op không kèm snapshot
+    /// (luồng xóa mới) → đọc từ TrashStore — dữ liệu local đã chuyển vào đó.
+    private func deleteFile(path: String, rawSnapshot: Data) async throws {
+        guard let snap = snapshot(from: rawSnapshot) else { return }
+        guard let node = snap.root ?? TrashStore.shared.node(forOriginalPath: path) else { return }
+        try await trashParts(of: node)
+        let children = !snap.children.isEmpty
+            ? snap.children
+            : TrashStore.shared.children(forOriginalPath: path)
+        for (_, child) in children where !child.isDirectory {
+            try await trashParts(of: child)
+        }
+    }
+
+    private func trashParts(of node: IndexNode) async throws {
+        guard let parts = node.parts else { return }
+        for part in parts {
+            guard let partID = part.driveFileId,
+                  let client = accounts.client(for: part.accountEmail) else { continue }
+            try? await client.trash(id: partID)   // trash, không delete hẳn
+        }
+    }
+
+    /// Khôi phục từ "Đã xóa gần đây": untrash các part đã trash lúc xóa.
+    /// Part chưa upload (driveFileId nil) bỏ qua — op uploadFile đi trước trong
+    /// journal sẽ upload mới từ mirror. Part 404 (bị Drive dọn) → upload lại.
+    /// Node trong index đã do UI upsert khi khôi phục — giữ nguyên.
+    private func restoreTrashed(path: String, rawSnapshot: Data) async throws {
+        guard let snap = snapshot(from: rawSnapshot), let node = snap.root else { return }
+        var parts = node.parts ?? []
+        for i in parts.indices {
+            guard let partID = parts[i].driveFileId,
+                  let client = accounts.client(for: parts[i].accountEmail) else { continue }
+            do {
+                try await client.untrash(id: partID)
+                AppLog.log("sync", "♻️ Untrash part \(parts[i].index) của \(node.name)")
+            } catch let err as DriveError {
+                if case .http(404, _, _) = err {
+                    // Part bị dọn khỏi thùng rác (quá 30 ngày) → upload lại từ mirror.
+                    parts[i].driveFileId = nil
+                    index.update(path: path) { $0.parts = parts }
+                    try await uploadFile(path: path)
+                } else {
+                    throw err
+                }
+            }
         }
     }
 
@@ -322,6 +389,18 @@ final class SyncEngine: ObservableObject {
                 try rangeData.write(to: partURL, options: .atomic)
                 driveFile = try await client.uploadResumable(fileURL: partURL, name: part.remoteName, parentID: parentID, appProperties: props)
                 try? FileManager.default.removeItem(at: partURL)
+            }
+
+            // Part này từng bị trash lúc xóa (khôi phục sau) — PATCH trên file
+            // trashed không kéo nó ra khỏi thùng rác → untrash tường minh.
+            if let existingID = part.driveFileId {
+                do {
+                    if try await client.get(id: existingID).trashed == true {
+                        try await client.untrash(id: existingID)
+                    }
+                } catch {
+                    AppLog.log("sync", "⚠️ Không kiểm tra được trạng thái trash của part \(part.index): \(error.localizedDescription)")
+                }
             }
 
             parts[i].driveFileId = driveFile.id
@@ -437,6 +516,7 @@ final class SyncEngine: ObservableObject {
             await setPhase(.working("Đang tải về \(item.node.name) (\(i + 1)/\(toPull.count))…"))
             do {
                 try await downloadFile(path: item.path, node: item.node)
+                store.notifyChanged()   // UI reload để thấy file vừa tải về
             } catch {
                 AppLog.log("sync", "❌ Không tải được \(item.path): \(error.localizedDescription)")
             }
@@ -677,6 +757,7 @@ extension JournalOp {
         case let .rename(f, t): return "đổi tên \(f.components.last ?? f)"
         case let .move(f, t): return "di chuyển \(f.components.last ?? f)"
         case let .delete(p, _): return "xóa \(p.components.last ?? p)"
+        case let .restoreTrash(p, _): return "khôi phục \(p.components.last ?? p)"
         }
     }
 }

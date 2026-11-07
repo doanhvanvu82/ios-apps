@@ -6,10 +6,20 @@ enum JournalOp: Codable, Hashable {
     case createFolder(path: String)
     case rename(from: String, to: String)
     case move(from: String, to: String)
-    /// Xoá: UI remove node khỏi index trước rồi enqueue — snapshot node
-    /// (parts/placement) đi kèm op để engine biết phải trash những part nào
+    /// Xoá: UI remove node khỏi index trước rồi enqueue — snapshot đi kèm op
+    /// (node gốc + toàn bộ node con) để engine biết phải trash những part nào
     /// trên Drive (op persist trong journal nên crash-safe).
-    case delete(path: String, snapshot: IndexNode?)
+    case delete(path: String, snapshot: TrashSnapshot?)
+    /// Khôi phục từ "Đã xóa gần đây": untrash các part trên Drive
+    /// (lúc xoá đã trash — FIFO journal đảm bảo untrash chạy sau trash).
+    case restoreTrash(path: String, node: IndexNode)
+}
+
+/// Chụp toàn bộ cây bị xoá lúc người dùng xoá (index bị remove TRƯỚC khi op
+/// chạy nên engine không đọc lại được từ index).
+struct TrashSnapshot: Codable, Hashable {
+    var root: IndexNode?
+    var children: [String: IndexNode]
 }
 
 /// Một bản ghi thao tác.

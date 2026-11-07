@@ -5,6 +5,10 @@ import Foundation
 final class FileSystemStore: ObservableObject {
     static let shared = FileSystemStore()
 
+    /// Tăng mỗi lần nội dung mirror thay đổi (UI Files đăng ký để reload ngay —
+    /// bản thân liệt kê thư mục không có gì để SwiftUI quan sát được).
+    @Published private(set) var changeToken = 0
+
     let rootURL: URL
     /// Hộp thư nhập file (kéo từ máy tính qua USB File Sharing).
     let inboxURL: URL
@@ -21,6 +25,18 @@ final class FileSystemStore: ObservableObject {
         try? fm.createDirectory(at: rootURL, withIntermediateDirectories: true)
         try? fm.createDirectory(at: inboxURL, withIntermediateDirectories: true)
         try? fm.createDirectory(at: tmpURL, withIntermediateDirectories: true)
+    }
+
+    /// Báo cho UI biết mirror vừa thay đổi (gọi trên main queue).
+    func notifyChanged() {
+        DispatchQueue.main.async { [weak self] in
+            self?.changeToken &+= 1
+        }
+    }
+
+    /// Đường dẫn có tồn tại (file hoặc thư mục).
+    func exists(at path: [String]) -> Bool {
+        fm.fileExists(atPath: url(for: path).path)
     }
 
     // MARK: - Đường dẫn
@@ -55,6 +71,7 @@ final class FileSystemStore: ObservableObject {
         let url = url(for: path)
         try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try data.write(to: url, options: .atomic)
+        notifyChanged()
     }
 
     /// Ghi file từ URL (copy vào mirror).
@@ -64,6 +81,17 @@ final class FileSystemStore: ObservableObject {
         try fm.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
         if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
         try fm.copyItem(at: srcURL, to: dest)
+        notifyChanged()
+        return dest
+    }
+
+    /// Copy cả thư mục (đệ quy) vào mirror.
+    @discardableResult
+    func copyDirectory(from srcURL: URL, to path: [String]) throws -> URL {
+        let dest = url(for: path)
+        if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
+        try fm.copyItem(at: srcURL, to: dest)
+        notifyChanged()
         return dest
     }
 
@@ -74,15 +102,20 @@ final class FileSystemStore: ObservableObject {
         try fm.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
         if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
         try fm.moveItem(at: src, to: dest)
+        notifyChanged()
     }
 
-    /// Xoá file/thư mục local (Drive sẽ trash bởi SyncEngine).
+    /// Xóa: chuyển vào "Đã xóa gần đây" (TrashStore) rồi mới khỏi mirror —
+    /// còn trong thùng rác 30 ngày, khôi phục được (giống app Files).
     func remove(at path: [String]) throws {
         let target = url(for: path)
         guard target.standardizedFileURL.path.hasPrefix(rootURL.standardizedFileURL.path + "/") else { return }
-        if fm.fileExists(atPath: target.path) {
-            try fm.removeItem(at: target)
-        }
+        guard fm.fileExists(atPath: target.path) else { return }
+        let p = path.joined(separator: "/")
+        TrashStore.shared.stash(path: p)
+        IndexStore.shared.remove(path: p)
+        IndexStore.shared.removeTree(prefix: p)
+        notifyChanged()
     }
 
     /// Kích thước file local (nil nếu chưa có).
@@ -105,7 +138,9 @@ final class FileSystemStore: ObservableObject {
         var id: String { name }
     }
 
+    /// Liệt kê entry trong 1 thư mục mirror (chỉ đọc khi caller quan sát changeToken).
     func listDirectory(_ path: [String]) throws -> [Entry] {
+        _ = changeToken
         let dirURL = url(for: path)
         guard fm.fileExists(atPath: dirURL.path) else { return [] }
         let items = try fm.contentsOfDirectory(at: dirURL, includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey])

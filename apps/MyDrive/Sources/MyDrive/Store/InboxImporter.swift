@@ -20,6 +20,7 @@ enum InboxImporter {
             }
             // Copy (không move) để không phá file gốc của app gửi.
             try FileManager.default.copyItem(at: url, to: dest)
+            FileSystemStore.shared.notifyChanged()
             AppLog.log("inbox", "✅ Nhận từ app khác: \(dest.lastPathComponent)")
             SyncEngine.triggerSyncPublic()
         } catch {
@@ -36,6 +37,7 @@ enum InboxImporter {
         guard !items.isEmpty else { return }
 
         AppLog.log("inbox", "📥 Inbox có \(items.count) mục — nhập…")
+        defer { FileSystemStore.shared.notifyChanged() }
         for item in items {
             let name = item.lastPathComponent
             guard name != ".DS_Store" else { continue }

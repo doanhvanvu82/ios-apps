@@ -8,6 +8,7 @@ struct FilesView: View {
     @StateObject private var store = FileSystemStore.shared
     @StateObject private var engine = SyncEngine.shared
     @StateObject private var accounts = AccountStore.shared
+    @StateObject private var trash = TrashStore.shared
 
     @State private var path: [String] = []
     @State private var showNewFolder = false
@@ -16,11 +17,13 @@ struct FilesView: View {
     @State private var showCamera: CameraMode?
     @State private var showNoteEditor = false
     @State private var showDocPicker = false
+    @State private var showFolderPicker = false
     @State private var showInboxHint = false
     @State private var renameTarget: FileSystemStore.Entry?
     @State private var moveTarget: FileSystemStore.Entry?
     @State private var previewURL: URL?
     @State private var shareURL: URL?
+    @State private var showTrash = false
 
     var body: some View {
         NavigationStack {
@@ -34,6 +37,9 @@ struct FilesView: View {
                             Label(".. Quay lại", systemImage: "chevron.left")
                                 .foregroundStyle(Theme.accent)
                         }
+                    }
+                    if path.isEmpty {
+                        trashRow
                     }
                     ForEach(entries) { entry in
                         row(entry)
@@ -58,7 +64,8 @@ struct FilesView: View {
                             Button { showCamera = .photo } label: { Label("Chụp ảnh", systemImage: "camera") }
                             Button { showCamera = .video } label: { Label("Quay video", systemImage: "video") }
                             Button { showNoteEditor = true } label: { Label("Ghi chú văn bản", systemImage: "square.and.pencil") }
-                            Button { showDocPicker = true } label: { Label("Chọn tệp (thường bị iOS chặn)", systemImage: "doc") }
+                            Button { showDocPicker = true } label: { Label("Chọn tệp…", systemImage: "doc") }
+                            Button { showFolderPicker = true } label: { Label("Chọn thư mục…", systemImage: "folder") }
                             Button { showInboxHint = true } label: { Label("Hộp thư Inbox (USB)", systemImage: "tray.and.arrow.down") }
                         }
                         Section {
@@ -100,6 +107,10 @@ struct FilesView: View {
                 DocumentPicker { urls in importDocuments(urls) }
                     .ignoresSafeArea()
             }
+            .sheet(isPresented: $showFolderPicker) {
+                FolderDocumentPicker { url in importDroppedFolder(url) }
+                    .ignoresSafeArea()
+            }
             .sheet(item: $renameTarget) { entry in
                 RenameSheet(currentName: entry.name) { newName in
                     commitRename(entry, newName)
@@ -121,11 +132,43 @@ struct FilesView: View {
                     ShareSheet(items: [url])
                 }
             }
+            .navigationDestination(isPresented: Binding(
+                get: { showTrash },
+                set: { showTrash = $0 }
+            )) {
+                RecentlyDeletedView(trash: trash)
+            }
+        }
+    }
+
+    /// Ô "Đã xóa gần đây" (giống app Files: chỉ hiện ở gốc Tệp).
+    private var trashRow: some View {
+        Button {
+            trash.purgeExpired()
+            showTrash = true
+        } label: {
+            HStack {
+                Image(systemName: "trash")
+                    .foregroundStyle(Color.secondary)
+                    .frame(width: 28)
+                Text("Đã xóa gần đây")
+                    .foregroundStyle(.primary)
+                Spacer()
+                if !trash.items.isEmpty {
+                    Text("\(trash.items.count)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
         }
     }
 
     private var entries: [FileSystemStore.Entry] {
-        (try? store.listDirectory(path)) ?? []
+        _ = store.changeToken   // đăng ký quan sát — mirror đổi là list tự reload
+        return (try? store.listDirectory(path)) ?? []
     }
 
     // MARK: - Row
@@ -198,7 +241,7 @@ struct FilesView: View {
         Button(role: .destructive) {
             deleteEntry(entry, childPath)
         } label: {
-            Label("Xóa (vào thùng rác Drive)", systemImage: "trash")
+            Label("Xóa", systemImage: "trash")
         }
     }
 
@@ -251,15 +294,12 @@ struct FilesView: View {
     }
 
     private func deleteEntry(_ entry: FileSystemStore.Entry, _ childPath: [String]) {
-        // Snapshot node TRƯỚC khi remove (engine cần parts để trash trên Drive).
+        // FileSystemStore.remove chuyển dữ liệu + đăng ký entry "Đã xóa gần đây"
+        // (kèm snapshot index). Engine đọc snapshot từ TrashStore khi xử lý op;
+        // part trên Drive do engine trash qua op delete.
         let p = childPath.joined(separator: "/")
-        let snapshot = IndexStore.shared.node(at: p)
         try? store.remove(at: childPath)
-        IndexStore.shared.remove(path: p)
-        if entry.isDirectory {
-            IndexStore.shared.removeTree(prefix: p)
-        }
-        Journal.shared.enqueue(.delete(path: p, snapshot: snapshot))
+        Journal.shared.enqueue(.delete(path: p, snapshot: nil))
         engine.triggerSync()
     }
 
@@ -342,6 +382,59 @@ struct FilesView: View {
         engine.triggerSync()
     }
 
+    /// Thư mục người dùng chọn (UIDocumentPicker asCopy trả bản copy trong tmp):
+    /// copy cả cây vào mirror, đăng ký index + journal theo từng cấp.
+    private func importDroppedFolder(_ srcURL: URL?) {
+        guard let srcURL else { return }
+        let dir = path
+        let name = srcURL.lastPathComponent
+        let dest = dir + [name]
+        let scoped = srcURL.startAccessingSecurityScopedResource()
+        defer {
+            if scoped { srcURL.stopAccessingSecurityScopedResource() }
+            try? FileManager.default.removeItem(at: srcURL)   // dọn bản copy trong tmp
+        }
+        do {
+            try store.copyDirectory(from: srcURL, to: dest)
+        } catch {
+            AppLog.log("import", "❌ Không copy được thư mục \(name): \(error.localizedDescription)")
+            return
+        }
+        registerImportedFolder(dest)
+        engine.triggerSync()
+    }
+
+    /// Đăng ký cả cây thư mục vừa nhập (thư mục → createFolder, file → uploadFile).
+    private func registerImportedFolder(_ dirPath: [String]) {
+        let index = IndexStore.shared
+        let fm = FileManager.default
+        let dirURL = store.url(for: dirPath)
+        let dirKey = dirPath.joined(separator: "/")
+        index.upsert(path: dirKey, node: .init(
+            name: dirPath.last ?? "", isDirectory: true, size: 0, modified: Date(), parts: nil, rev: 1, driveFolderId: nil
+        ))
+        Journal.shared.enqueue(.createFolder(path: dirKey))
+
+        let enumerator = fm.enumerator(at: dirURL, includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey])
+        while let next = enumerator?.nextObject() as? URL {
+            let isDir = ((try? next.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory) ?? false
+            guard let rel = store.relativePath(of: next) else { continue }
+            if isDir {
+                index.upsert(path: rel.joined(separator: "/"), node: .init(
+                    name: rel.last ?? "", isDirectory: true, size: 0, modified: Date(), parts: nil, rev: 1, driveFolderId: nil
+                ))
+                Journal.shared.enqueue(.createFolder(path: rel.joined(separator: "/")))
+            } else {
+                let size = ((try? next.resourceValues(forKeys: [.fileSizeKey]))?.fileSize).map(Int64.init) ?? 0
+                let p = rel.joined(separator: "/")
+                index.upsert(path: p, node: .init(
+                    name: rel.last ?? "", isDirectory: false, size: size, modified: Date(), parts: nil, rev: 1, driveFolderId: nil
+                ))
+                Journal.shared.enqueue(.uploadFile(path: p))
+            }
+        }
+    }
+
     /// Đăng ký file vừa nhập vào index (chưa có placement → SyncEngine tự chọn account).
     private func registerImportedFile(_ dest: [String]) {
         let size = store.fileSize(at: dest) ?? 0
@@ -351,5 +444,118 @@ struct FilesView: View {
             modified: Date(), parts: nil, rev: 1, driveFolderId: nil
         ))
         Journal.shared.enqueue(.uploadFile(path: p))
+    }
+}
+
+/// "Đã xóa gần đây" — liệt kê các mục đã xóa (30 ngày tự dọn), khôi phục hoặc
+/// xóa hẳn. Giống app Files.
+struct RecentlyDeletedView: View {
+    @StateObject private var trash: TrashStore
+    @State private var confirmPurgeAll = false
+    @State private var confirmPurge: TrashStore.Item?
+
+    init(trash: TrashStore) {
+        _trash = StateObject(wrappedValue: trash)
+    }
+
+    var body: some View {
+        List {
+            if trash.items.isEmpty {
+                Text("Không có mục nào đã xóa trong 30 ngày.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(trash.items) { item in
+                row(item)
+            }
+        }
+        .navigationTitle("Đã xóa gần đây")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if !trash.items.isEmpty {
+                    Button(role: .destructive) {
+                        confirmPurgeAll = true
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                }
+            }
+        }
+        .onAppear { trash.purgeExpired() }
+        .alert("Dọn sạch thùng rác?", isPresented: $confirmPurgeAll) {
+            Button("Dọn sạch", role: .destructive) { trash.purgeAll() }
+            Button("Huỷ", role: .cancel) {}
+        } message: {
+            Text("\(trash.items.count) mục sẽ bị xóa vĩnh viễn.")
+        }
+        .alert("Xóa vĩnh viễn?", isPresented: Binding(
+            get: { confirmPurge != nil },
+            set: { if !$0 { confirmPurge = nil } }
+        )) {
+            Button("Xóa", role: .destructive) {
+                if let item = confirmPurge { trash.purge(item) }
+                confirmPurge = nil
+            }
+            Button("Huỷ", role: .cancel) { confirmPurge = nil }
+        } message: {
+            Text("\"\(confirmPurge?.node.name ?? "")\" sẽ bị xóa vĩnh viễn khỏi thiết bị và Google Drive.")
+        }
+    }
+
+    @ViewBuilder
+    private func row(_ item: TrashStore.Item) -> some View {
+        HStack {
+            Image(systemName: item.node.isDirectory ? "folder.fill" : "doc")
+                .foregroundStyle(item.node.isDirectory ? Theme.accent : Color.secondary)
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.node.name)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Text(Self.subtitle(item))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .contextMenu {
+            Button {
+                trash.restore(item)
+            } label: {
+                Label("Khôi phục", systemImage: "arrow.uturn.backward")
+            }
+            Button(role: .destructive) {
+                confirmPurge = item
+            } label: {
+                Label("Xóa vĩnh viễn", systemImage: "trash.fill")
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                confirmPurge = item
+            } label: {
+                Label("Xóa", systemImage: "trash")
+            }
+            Button {
+                trash.restore(item)
+            } label: {
+                Label("Khôi phục", systemImage: "arrow.uturn.backward")
+            }
+            .tint(Theme.accent)
+        }
+    }
+
+    private static func subtitle(_ item: TrashStore.Item) -> String {
+        let df = DateFormatter()
+        df.dateStyle = .short
+        df.timeStyle = .short
+        let when = df.string(from: item.deletedAt)
+        var parts = ["Đã xóa \(when)"]
+        if item.node.isDirectory, !item.children.isEmpty {
+            parts.append("\(item.children.count) mục bên trong")
+        }
+        parts.append("còn \(item.daysLeft) ngày")
+        return parts.joined(separator: " · ")
     }
 }

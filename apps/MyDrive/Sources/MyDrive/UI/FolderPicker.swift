@@ -1,15 +1,33 @@
 import SwiftUI
 
-/// Chọn thư mục đích (di chuyển file/thư mục). Danh sách bấm để đi xuống,
-/// nút "Chọn thư mục này" xác nhận.
+/// Chọn thư mục trong mirror: danh sách bấm để đi xuống, nút "Chọn" xác nhận.
+/// Dùng cho di chuyển file/thư mục (closure `dirs` mặc định) và mở rộng sau
+/// (vd chọn đích nhập file — truyền closure riêng).
 struct FolderPicker: View {
     @StateObject var store: FileSystemStore
     let currentPath: [String]
     let title: String
+    var dirs: ([String]) -> [FileSystemStore.Entry]
     var onPick: ([String]) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var path: [String] = []
+
+    init(
+        store: FileSystemStore,
+        currentPath: [String],
+        title: String,
+        dirs: @escaping ([String]) -> [FileSystemStore.Entry] = { path in
+            ((try? FileSystemStore.shared.listDirectory(path)) ?? []).filter(\.isDirectory)
+        },
+        onPick: @escaping ([String]) -> Void
+    ) {
+        _store = StateObject(wrappedValue: store)
+        self.currentPath = currentPath
+        self.title = title
+        self.dirs = dirs
+        self.onPick = onPick
+    }
 
     var body: some View {
         NavigationStack {
@@ -22,7 +40,7 @@ struct FolderPicker: View {
                             .foregroundStyle(Theme.accent)
                     }
                 }
-                ForEach(dirs) { entry in
+                ForEach(self.dirs(path)) { entry in
                     Button {
                         path.append(entry.name)
                     } label: {
@@ -30,7 +48,7 @@ struct FolderPicker: View {
                             .foregroundStyle(Theme.accent)
                     }
                 }
-                if dirs.isEmpty {
+                if self.dirs(path).isEmpty {
                     Text("(không có thư mục con)")
                         .foregroundStyle(.secondary)
                 }
@@ -50,9 +68,5 @@ struct FolderPicker: View {
             }
             .onAppear { path = currentPath }
         }
-    }
-
-    private var dirs: [FileSystemStore.Entry] {
-        ((try? store.listDirectory(path)) ?? []).filter(\.isDirectory)
     }
 }

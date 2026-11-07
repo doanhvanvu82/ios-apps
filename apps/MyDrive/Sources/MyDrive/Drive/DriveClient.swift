@@ -368,6 +368,11 @@ final class DriveClient {
         _ = try await request("PATCH", "/files/\(id)", jsonBody: ["trashed": true])
     }
 
+    /// Lấy khỏi thùng rác (khôi phục từ "Đã xóa gần đây").
+    func untrash(id: String) async throws {
+        _ = try await request("PATCH", "/files/\(id)", jsonBody: ["trashed": false])
+    }
+
     // MARK: - Download
 
     /// Tải nội dung file về Data (file nhỏ).
