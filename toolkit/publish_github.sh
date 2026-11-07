@@ -38,7 +38,17 @@ DIST_ARGS=()
 if [ -n "${DIST_DIR:-}" ]; then
     DIST_ARGS=(--dist "$DIST_DIR")
 fi
-SOURCE_OUT="$OUT_DIR" python3 toolkit/sidestore_source.py "$BASE" --source-url "$SOURCE_URL" "${DIST_ARGS[@]}"
+SOURCE_OUT="$OUT_DIR" python3 toolkit/sidestore_source.py "$BASE" --source-url "$SOURCE_URL" "${DIST_ARGS[@]+"${DIST_ARGS[@]}"}"
+
+# Không bao giờ push source.json rỗng (vd artifact CI giải nén sai thư mục):
+# Ksign sẽ mất toàn bộ app.
+COUNT="$(python3 -c "import json,sys; print(len(json.load(open(sys.argv[1]))['apps']))" "$OUT_DIR/source.json")"
+if [ "$COUNT" -eq 0 ]; then
+    echo "❌ source.json không có app nào — kiểm tra IPA trong ${DIST_DIR:-apps+mods}." >&2
+    exit 1
+fi
+
+echo "→ Source có $COUNT mục."
 
 mkdir -p source
 cp "$OUT_DIR/source.json" source/source.json

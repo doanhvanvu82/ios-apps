@@ -127,18 +127,35 @@ def collect_ipas():
     """IPA cần đưa vào source: apps/*/xtool/*.ipa + mods/*/out/*.ipa.
 
     --dist DIR (hoặc DIST_DIR) thay cho quét repo — dùng khi CI tải artifact về
-    một thư mục phẳng.
+    một thư mục (có thể lồng nhau: apps/<App>/xtool/, mods/<mod>/out/).
     """
     dist = os.environ.get("DIST_DIR")
     args = sys.argv[1:]
     if "--dist" in args:
         dist = args[args.index("--dist") + 1]
     if dist:
-        return sorted(glob.glob(os.path.join(dist, "*.ipa")), key=os.path.getmtime)
+        return sorted(glob.glob(os.path.join(dist, "**", "*.ipa"), recursive=True),
+                      key=os.path.getmtime)
+
+    excluded = set()
+    exclude_file = os.path.join(ROOT, "build-exclude.txt")
+    try:
+        with open(exclude_file, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.split("#", 1)[0].strip()
+                if line:
+                    excluded.add(line)
+    except FileNotFoundError:
+        pass
 
     ipas = []
     for area in ("apps", "mods"):
         for entry in sorted(glob.glob(os.path.join(ROOT, area, "*"))):
+            base = os.path.basename(entry)
+            rel = f"{area}/{base}"
+            # Tôn trọng build-exclude.txt: mục không build thì không có trong source.
+            if base in excluded or rel in excluded:
+                continue
             for sub in ("xtool", "out"):
                 found = sorted(glob.glob(os.path.join(entry, sub, "*.ipa")),
                                key=os.path.getmtime)
