@@ -227,7 +227,7 @@ struct FilesView: View {
                             .foregroundStyle(.primary)
                             .lineLimit(1)
                         Spacer()
-                        Text(ByteCountFormatter.string(fromByteCount: entry.size, countStyle: .file))
+                        Text(ByteFmt.string(entry.size))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

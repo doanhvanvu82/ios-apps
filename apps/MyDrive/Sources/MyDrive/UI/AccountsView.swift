@@ -57,7 +57,7 @@ struct AccountsView: View {
         let limit = accounts.accounts.compactMap { $0.quotaLimit }.reduce(0, +)
         let usage = accounts.accounts.compactMap { $0.quotaUsage }.reduce(0, +)
         guard limit > 0 else { return "chưa biết" }
-        return ByteCountFormatter.string(fromByteCount: usage, countStyle: .file) + " / " + ByteCountFormatter.string(fromByteCount: limit, countStyle: .file)
+        return ByteFmt.string(usage) + " / " + ByteFmt.string(limit)
     }
 
     private func accountRow(_ acc: DriveAccount) -> some View {
@@ -74,7 +74,7 @@ struct AccountsView: View {
                         .foregroundStyle(.orange)
                 } else if let limit = acc.quotaLimit, let usage = acc.quotaUsage {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("\(ByteCountFormatter.string(fromByteCount: usage, countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: limit, countStyle: .file))")
+                        Text("\(ByteFmt.string(usage)) / \(ByteFmt.string(limit))")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         ProgressView(value: Double(usage), total: Double(limit))

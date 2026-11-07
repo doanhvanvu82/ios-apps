@@ -30,7 +30,7 @@ struct SettingsView: View {
                                 .lineLimit(1)
                             Spacer()
                             if let limit = acc.quotaLimit, let usage = acc.quotaUsage {
-                                Text("\(ByteCountFormatter.string(fromByteCount: limit - usage, countStyle: .file)) trống")
+                                Text("\(ByteFmt.string(limit - usage)) trống")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             } else {
@@ -41,7 +41,7 @@ struct SettingsView: View {
                     }
                     if !accounts.accounts.isEmpty {
                         let free = accounts.accounts.compactMap(\.freeBytes).reduce(0, +)
-                        Text("Tổng còn trống: \(ByteCountFormatter.string(fromByteCount: free, countStyle: .file))")
+                        Text("Tổng còn trống: \(ByteFmt.string(free))")
                             .font(.footnote.weight(.semibold))
                     }
                 }
