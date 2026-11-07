@@ -48,6 +48,8 @@ struct AccountsView: View {
             } message: {
                 Text(errorText ?? "")
             }
+            // Lấy dung lượng khi mở tab (cache 10 phút — không gọi mạng thừa).
+            .task { await PlacementService.shared.refreshQuotas() }
         }
     }
 

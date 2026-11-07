@@ -3,6 +3,8 @@ import Foundation
 /// Chọn account cho file/part: account còn trống nhiều nhất (biên an toàn 5%).
 /// Quyết định ghi vào index (crash-safe) TRƯỚC khi upload.
 final class PlacementService {
+    static let shared = PlacementService()
+
     /// Biên an toàn: giữ lại 5% dung lượng (Google đếm cả thứ khác ngoài app).
     static let safetyMargin: Double = 0.05
     /// Quota cache cũ hơn 10 phút → refresh trước khi quyết định.

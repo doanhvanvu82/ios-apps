@@ -44,7 +44,7 @@ final class SyncEngine: ObservableObject {
     private let store = FileSystemStore.shared
     private let index = IndexStore.shared
     private let journal = Journal.shared
-    private let placement = PlacementService()
+    private let placement = PlacementService.shared
 
     private var syncTask: Task<Void, Never>?
     private var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
@@ -70,6 +70,8 @@ final class SyncEngine: ObservableObject {
         FileSystemStore.shared.notifyChanged()
         InboxImporter.processInbox()
         triggerSync()
+        // Dung lượng các account (chỉ account cache cũ >10 phút mới gọi mạng).
+        Task { await PlacementService.shared.refreshQuotas() }
     }
 
     @objc private func appWillResignActive() {
