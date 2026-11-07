@@ -144,6 +144,14 @@ struct FilesView: View {
             )) {
                 RecentlyDeletedView(trash: trash)
             }
+            .onReceive(NotificationCenter.default.publisher(for: .myDriveTabRetapped)) { note in
+                // Bấm lại tab Tệp khi đang ở thư mục con → về root (như app Files).
+                guard (note.object as? Int) == 0 else { return }
+                showTrash = false   // pop màn Đã xóa gần đây nếu đang mở
+                previewURL = nil
+                shareURL = nil
+                path = []
+            }
         }
     }
 
