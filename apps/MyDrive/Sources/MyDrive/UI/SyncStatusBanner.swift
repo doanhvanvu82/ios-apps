@@ -32,7 +32,7 @@ struct SyncStatusBanner: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 6)
                 .background(Color.orange.opacity(0.12))
-            } else if status.pendingCount > 0 {
+            } else if status.hasPendingWork {
                 HStack(spacing: 8) {
                     Image(systemName: "clock.arrow.circlepath")
                     Text(status.text)

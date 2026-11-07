@@ -29,6 +29,11 @@ struct SyncStatus: Equatable {
         if case .working = phase { return true }
         return false
     }
+
+    /// Còn việc chưa xong (đang chạy hoặc op chờ trong journal) — banner phải hiện.
+    var hasPendingWork: Bool {
+        isWorking || pendingCount > 0
+    }
 }
 
 /// Engine đồng bộ: đẩy Journal lên Drive, kéo file thiếu từ Drive về mirror,
@@ -177,7 +182,14 @@ final class SyncEngine: ObservableObject {
         // 4) Mirror index.json lên MỌI account.
         await mirrorIndex(rootIDs: rootIDs)
 
-        await setPhase(.idle)
+        // Vẫn còn op chờ (account đầy, lỗi tạm) → KHÔNG báo idle: banner giữ
+        // trạng thái "N thao tác chờ" để người dùng biết sync chưa xong.
+        if journal.count == 0 {
+            await setPhase(.idle)
+        } else {
+            await setPhase(.idle)
+            await setPhase(.working("\(journal.count) thao tác chờ — sẽ thử lại"))
+        }
         await MainActor.run { self.lastSyncAt = Date() }
     }
 
@@ -215,6 +227,7 @@ final class SyncEngine: ObservableObject {
                 case .quotaExceeded:
                     // Account đầy — op upload sẽ tự chọn account khác trong lần retry.
                     journal.recordFailure(entry, error: err.localizedDescription)
+                    AppLog.log("sync", "⚠️ \(entry.op.describe): không account nào đủ chỗ — thử lại lần sau")
                     await setPhase(.working("Account đầy — thử account khác…"))
                     try? await processEntryRetryOtherAccount(entry, rootIDs: rootIDs)
                 case .invalidGrant:
@@ -330,19 +343,28 @@ final class SyncEngine: ObservableObject {
         }
         let fileName = path.components.last ?? "file"
 
-        // 1) Nếu chưa có placement → đặt account(s) theo dung lượng.
-        if index.node(at: path) == nil {
+        // 1) Nếu chưa có placement (node mới HOẶC node có parts nil — UI upsert
+        //    trước khi op chạy) → đặt account(s) theo dung lượng. Trước đây chỉ
+        //    kiểm tra node == nil → parts nil thoát im lặng, op bị coi là xong
+        //    mà chẳng upload gì (bug "chỉ thấy folder trên Drive").
+        if index.node(at: path)?.parts == nil || index.node(at: path)?.parts?.isEmpty == true {
             let partsPlan = Chunker.planParts(size: size)
             var placed = await placement.place(parts: partsPlan)
             for i in placed.indices {
                 placed[i].remoteName = Chunker.partName(fileName: fileName, index: placed[i].index)
             }
-            let node = IndexNode(name: fileName, isDirectory: false, size: size, modified: Date(), parts: placed, rev: 1, driveFolderId: nil)
-            index.upsert(path: path, node: node)
+            if index.node(at: path) != nil {
+                index.update(path: path) { $0.parts = placed }
+            } else {
+                index.upsert(path: path, node: .init(name: fileName, isDirectory: false, size: size, modified: Date(), parts: placed, rev: 1, driveFolderId: nil))
+            }
         }
 
         // 2) Upload từng part chưa xong (var parts — cập nhật sau mỗi part).
-        guard var parts = index.node(at: path)?.parts else { return }
+        guard var parts = index.node(at: path)?.parts, !parts.isEmpty else {
+            AppLog.log("sync", "⚠️ \(fileName): không có placement sau khi đặt — bỏ qua")
+            return
+        }
         for (i, part) in parts.enumerated() {
             guard part.driveFileId == nil else { continue }
             guard part.accountEmail != "" else {

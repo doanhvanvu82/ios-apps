@@ -45,7 +45,7 @@
 		</dict>
 	</dict>
 	<key>CFBundleShortVersionString</key>
-	<string>1.33</string>
+	<string>1.34</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -58,7 +58,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>33</string>
+	<string>34</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>MyDriveOAuthClientID</key>
