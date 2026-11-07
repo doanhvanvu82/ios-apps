@@ -16,6 +16,10 @@ enum AppPaths {
     static let trash = support.appendingPathComponent("MyDrive.trash", isDirectory: true)
     static let tmp = support.appendingPathComponent("MyDrive.tmp", isDirectory: true)
     static let inbox = docs.appendingPathComponent("Inbox", isDirectory: true)
+    /// Bãi trung chuyển CHUNG với app Files (kế bên Logs): người dùng copy từ
+    /// Files vào đây, rồi mở MyDrive "Di chuyển vào MyDrive". Nội dung ở đây
+    /// KHÔNG đồng bộ — chỉ nhập kho khi được di chuyển ra.
+    static let sharedFiles = docs.appendingPathComponent("Shared", isDirectory: true)
 
     /// Chuyển dữ liệu từ layout cũ (Documents/MyDrive + Documents/.myd-*) sang
     /// layout mới. Chạy đúng 1 lần (static let = atomic once), idempotent.
@@ -59,7 +63,7 @@ enum AppPaths {
     }
 
     static func ensureDirs() {
-        for url in [mirror, meta, trash, tmp, inbox] {
+        for url in [mirror, meta, trash, tmp, inbox, sharedFiles] {
             try? fm.createDirectory(at: url, withIntermediateDirectories: true)
         }
     }

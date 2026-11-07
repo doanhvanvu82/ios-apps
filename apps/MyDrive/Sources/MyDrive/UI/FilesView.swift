@@ -46,6 +46,8 @@ struct FilesView: View {
     @State private var showDocPicker = false
     @State private var showFolderPicker = false
     @State private var showInboxHint = false
+    @State private var showSharedFiles = false
+    @State private var showInfoSheet = false
     @State private var renameTarget: FileSystemStore.Entry?
     @State private var previewURL: URL?
     @State private var previewURLs: [URL] = []
@@ -65,6 +67,8 @@ struct FilesView: View {
     @AppStorage("mydSort") private var sortRaw = SortOption.nameAsc.rawValue
     @State private var searchText = ""
     @State private var infoPath: String?
+
+    private var alertDeleteTitle: String { "Xóa \(selectedPaths.count) mục?" }
 
     var body: some View {
         NavigationStack {
@@ -109,7 +113,7 @@ struct FilesView: View {
                 Button("Tạo") { createFolder() }
                 Button("Huỷ", role: .cancel) {}
             }
-            .alert("Xóa \(selectedPaths.count) mục?", isPresented: $confirmDeleteSelection) {
+            .alert(alertDeleteTitle, isPresented: $confirmDeleteSelection) {
                 Button("Xóa", role: .destructive) { deleteSelected() }
                 Button("Huỷ", role: .cancel) {}
             } message: {
@@ -177,24 +181,24 @@ struct FilesView: View {
                     .ignoresSafeArea()
                 }
             }
-            .sheet(isPresented: Binding(get: { infoPath != nil }, set: { if !$0 { infoPath = nil } })) {
+            .sheet(isPresented: $showInfoSheet) {
                 if let p = infoPath {
                     InfoView(path: p)
                 }
             }
-            .sheet(isPresented: Binding(get: { showTrash }, set: { showTrash = $0 })) {
-                RecentlyDeletedView(trash: trash)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .myDriveTabRetapped)) { note in
-                // Bấm lại tab Tệp khi đang ở thư mục con → về root (như app Files).
-                guard (note.object as? Int) == 0 else { return }
-                exitSelection()
-                showTrash = false
-                previewURL = nil
-                shareURLs = nil
-                searchText = ""
-                path = []
-            }
+            .modifier(CommonSheets(
+                showTrash: $showTrash,
+                trash: trash,
+                showSharedFiles: $showSharedFiles,
+                onTabRetapped: {
+                    exitSelection()
+                    showTrash = false
+                    previewURL = nil
+                    shareURLs = nil
+                    searchText = ""
+                    path = []
+                }
+            ))
         }
     }
 
@@ -247,6 +251,7 @@ struct FilesView: View {
                         Button { showNoteEditor = true } label: { Label("Ghi chú văn bản", systemImage: "square.and.pencil") }
                         Button { showDocPicker = true } label: { Label("Chọn tệp…", systemImage: "doc") }
                         Button { showFolderPicker = true } label: { Label("Chọn thư mục…", systemImage: "folder") }
+                        Button { showSharedFiles = true } label: { Label("Tệp chung (từ app Files)", systemImage: "arrow.left.arrow.right.square") }
                         Button { showInboxHint = true } label: { Label("Hộp thư Inbox (USB)", systemImage: "tray.and.arrow.down") }
                     }
                     Section {
@@ -480,6 +485,7 @@ struct FilesView: View {
         }
         Button {
             infoPath = childPath.joined(separator: "/")
+            showInfoSheet = true
         } label: {
             Label("Thông tin", systemImage: "info.circle")
         }
@@ -850,6 +856,31 @@ struct FilesView: View {
             modified: Date(), parts: nil, rev: 1, driveFolderId: nil
         ))
         Journal.shared.enqueue(.uploadFile(path: p))
+    }
+}
+
+// MARK: - Sheet chung (trash, tệp chung, tab-retapped)
+
+/// Tách modifier để compiler không phải type-check chuỗi modifier quá dài.
+struct CommonSheets: ViewModifier {
+    @Binding var showTrash: Bool
+    @ObservedObject var trash: TrashStore
+    @Binding var showSharedFiles: Bool
+    let onTabRetapped: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(isPresented: $showTrash) {
+                RecentlyDeletedView(trash: trash)
+            }
+            .sheet(isPresented: $showSharedFiles) {
+                NavigationStack { SharedFilesView() }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .myDriveTabRetapped)) { note in
+                // Bấm lại tab Tệp khi đang ở thư mục con → về root (như app Files).
+                guard (note.object as? Int) == 0 else { return }
+                onTabRetapped()
+            }
     }
 }
 
