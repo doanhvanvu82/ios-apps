@@ -12,7 +12,7 @@
       "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker.png",
       "tintColor": "#738CFF",
       "version": "1.68",
-      "versionDate": "2026-11-04",
+      "versionDate": "2026-11-07",
       "versionDescription": "Build 68",
       "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.68.ipa",
       "size": 1982836,
@@ -20,7 +20,7 @@
         {
           "version": "1.68",
           "buildVersion": "68",
-          "date": "2026-11-04T09:34:59+00:00",
+          "date": "2026-11-07T04:33:02+00:00",
           "localizedDescription": "Build 68",
           "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.68.ipa",
           "size": 1982836
@@ -40,7 +40,7 @@
       "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub.png",
       "tintColor": "#738CFF",
       "version": "2.30",
-      "versionDate": "2026-11-04",
+      "versionDate": "2026-11-07",
       "versionDescription": "Build 130",
       "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub-2.30.ipa",
       "size": 74762213,
@@ -48,7 +48,7 @@
         {
           "version": "2.30",
           "buildVersion": "130",
-          "date": "2026-11-04T09:34:59+00:00",
+          "date": "2026-11-07T04:33:02+00:00",
           "localizedDescription": "Build 130",
           "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub-2.30.ipa",
           "size": 74762213
@@ -68,7 +68,7 @@
       "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate.png",
       "tintColor": "#738CFF",
       "version": "1.66",
-      "versionDate": "2026-11-04",
+      "versionDate": "2026-11-07",
       "versionDescription": "Build 66",
       "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate-1.66.ipa",
       "size": 283099,
@@ -76,10 +76,38 @@
         {
           "version": "1.66",
           "buildVersion": "66",
-          "date": "2026-11-04T09:34:59+00:00",
+          "date": "2026-11-07T04:33:02+00:00",
           "localizedDescription": "Build 66",
           "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate-1.66.ipa",
           "size": 283099
+        }
+      ],
+      "appPermissions": {
+        "entitlements": [],
+        "privacy": {}
+      }
+    },
+    {
+      "name": "MyDrive",
+      "bundleIdentifier": "vn.vudv.mydrive",
+      "developerName": "vudv",
+      "subtitle": "Bản build từ máy tính",
+      "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
+      "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/MyDrive.png",
+      "tintColor": "#738CFF",
+      "version": "1.13",
+      "versionDate": "2026-11-07",
+      "versionDescription": "Build 13",
+      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/MyDrive-1.13.ipa",
+      "size": 719612,
+      "versions": [
+        {
+          "version": "1.13",
+          "buildVersion": "13",
+          "date": "2026-11-07T04:33:02+00:00",
+          "localizedDescription": "Build 13",
+          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/MyDrive-1.13.ipa",
+          "size": 719612
         }
       ],
       "appPermissions": {

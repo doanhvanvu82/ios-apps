@@ -1,0 +1,9 @@
+Sao chép file này thành oauth_client.txt rồi dán OAuth Client ID vào bên trong (một dòng).
+
+Cách lấy Client ID: xem SETUP.md (mục "Bước làm trên Google Cloud").
+Ví dụ: 1234567890-abc123def456.apps.googleusercontent.com
+
+build.sh sẽ đọc file này, ghi vào Info.plist:
+  - MyDriveOAuthClientID  — app đọc khi đăng nhập.
+  - CFBundleURLTypes      — scheme redirect = reversed client ID (bắt buộc
+                            phải có từ lúc build, iOS không cho đăng ký scheme lúc chạy).
