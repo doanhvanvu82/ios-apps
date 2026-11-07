@@ -6,7 +6,9 @@ import Foundation
 struct DriveFile: Codable, Identifiable, Hashable {
     var id: String
     var name: String
-    var mimeType: String
+    /// nil khi fields mask không lấy mimeType (vd chỉ id,name) — decode không được
+    /// chết vì thiếu key (đã từng làm ensureRootFolder fail "badJSON" vĩnh viễn).
+    var mimeType: String?
     var size: String?          // Drive trả dạng chuỗi; nil với folder/Google Docs
     var modifiedTime: Date?
     var createdTime: Date?

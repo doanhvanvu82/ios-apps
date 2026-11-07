@@ -144,7 +144,7 @@ final class DriveClient {
         // Thử tìm trước (marker appProperties để phân biệt với folder MyDrive thường).
         let query = [
             URLQueryItem(name: "q", value: "name = 'MyDrive' and mimeType = 'application/vnd.google-apps.folder' and trashed = false and 'root' in parents and appProperties has { key='mydFolder' and value='root' }"),
-            URLQueryItem(name: "fields", value: "files(id,name)"),
+            URLQueryItem(name: "fields", value: "files(id,name,mimeType)"),
             URLQueryItem(name: "pageSize", value: "5"),
         ]
         let data = try await request("GET", "/files", query: query)
@@ -231,7 +231,7 @@ final class DriveClient {
         let metaJSON = try JSONSerialization.data(withJSONObject: meta)
 
         // 1) Mở session resumable → server trả upload URL qua header Location.
-        var initReq = URLRequest(url: URL(string: "\(Self.uploadBase)/files?uploadType=resumable&fields=id,name,size")!)
+        var initReq = URLRequest(url: URL(string: "\(Self.uploadBase)/files?uploadType=resumable&fields=id,name,mimeType,size")!)
         let token = try await tokens.validAccessToken(for: account)
         initReq.httpMethod = "POST"
         initReq.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -358,7 +358,7 @@ final class DriveClient {
         var query: [URLQueryItem] = []
         if let addParents { query.append(URLQueryItem(name: "addParents", value: addParents)) }
         if let removeParents { query.append(URLQueryItem(name: "removeParents", value: removeParents)) }
-        query.append(URLQueryItem(name: "fields", value: "id,name,parents,modifiedTime"))
+        query.append(URLQueryItem(name: "fields", value: "id,name,mimeType,parents,modifiedTime"))
         let data = try await request("PATCH", "/files/\(id)", query: query, jsonBody: body)
         return try decode(DriveFile.self, data)
     }
