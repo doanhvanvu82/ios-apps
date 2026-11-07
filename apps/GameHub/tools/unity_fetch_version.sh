@@ -25,7 +25,7 @@ for VER in "$@"; do
         continue
     fi
 
-    echo "→ Lấy thông tin Unity $VER…"
+    echo "→ Lấy thông tin Unity ${VER}…"
     META="$(curl -s --max-time 30 \
         "https://services.api.unity.com/unity/editor/release/v1/releases?version=$VER&limit=1")"
 

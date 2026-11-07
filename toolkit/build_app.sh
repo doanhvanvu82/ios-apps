@@ -84,7 +84,7 @@ if [ ! -x "$XTOOL" ]; then
     echo "❌ Không thấy xtool tại $XTOOL (đặt XTOOL=/path/to/xtool hoặc cài xtool trong PATH)." >&2
     exit 1
 fi
-echo "→ Building với $XTOOL…"
+echo "→ Building với ${XTOOL}…"
 "$XTOOL" dev build --ipa
 
 IPA="$(ls -t xtool/*.ipa | head -1)"

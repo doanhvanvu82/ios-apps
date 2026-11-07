@@ -224,7 +224,7 @@ PY
 make_ipa() {
   local tag="$1" dylib="$2" bid="$3" disp="$4" outname="$5"
   local stage="$WORK/stage/$tag"
-  echo "→ dựng $stage…"
+  echo "→ dựng ${stage}…"
   rm -rf "$stage"; mkdir -p "$stage"
   cp -a "$WORK/orig/Payload" "$stage/Payload"
 
