@@ -205,13 +205,14 @@ struct DocumentPicker: UIViewControllerRepresentable {
     }
 }
 
-/// UIDocumentPicker chọn thư mục (asCopy → trả bản copy của cây thư mục trong
-/// tmp; copy sang mirror xong phải xoá để tmp không phình to).
+/// UIDocumentPicker chọn thư mục. BẮT BUỘC asCopy: false — iOS ném exception
+/// (crash) nếu yêu cầu copy thư mục; chỉ picker FILE mới được asCopy: true.
+/// Nhận URL security-scoped tại chỗ, caller tự copy cả cây rồi stop access.
 struct FolderDocumentPicker: UIViewControllerRepresentable {
     var onDone: (URL?) -> Void
 
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        let vc = UIDocumentPickerViewController(forOpeningContentTypes: [.folder], asCopy: true)
+        let vc = UIDocumentPickerViewController(forOpeningContentTypes: [.folder], asCopy: false)
         vc.delegate = context.coordinator
         return vc
     }

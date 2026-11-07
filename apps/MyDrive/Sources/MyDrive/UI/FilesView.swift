@@ -383,18 +383,23 @@ struct FilesView: View {
         engine.triggerSync()
     }
 
-    /// Thư mục người dùng chọn (UIDocumentPicker asCopy trả bản copy trong tmp):
-    /// copy cả cây vào mirror, đăng ký index + journal theo từng cấp.
+    /// Thư mục người dùng chọn (picker mở tại chỗ — URL gốc security-scoped):
+    /// copy cả cây vào mirror trong lúc còn quyền truy cập, đăng ký index +
+    /// journal theo từng cấp. KHÔNG xoá srcURL — đó là thư mục thật của người dùng.
     private func importDroppedFolder(_ srcURL: URL?) {
         guard let srcURL else { return }
-        let dir = path
-        let name = srcURL.lastPathComponent
-        let dest = dir + [name]
         let scoped = srcURL.startAccessingSecurityScopedResource()
-        defer {
-            if scoped { srcURL.stopAccessingSecurityScopedResource() }
-            try? FileManager.default.removeItem(at: srcURL)   // dọn bản copy trong tmp
+        defer { if scoped { srcURL.stopAccessingSecurityScopedResource() } }
+        let dir = path
+        var name = srcURL.lastPathComponent
+        var n = 2
+        while store.exists(at: dir + [name])
+            || IndexStore.shared.node(at: (dir + [name]).joined(separator: "/")) != nil {
+            name += " (\(n))"
+            n += 1
+            if n > 999 { break }
         }
+        let dest = dir + [name]
         do {
             try store.copyDirectory(from: srcURL, to: dest)
         } catch {
