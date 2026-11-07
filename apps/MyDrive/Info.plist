@@ -45,11 +45,24 @@
 		</dict>
 	</dict>
 	<key>CFBundleShortVersionString</key>
-	<string>1.13</string>
+	<string>1.14</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>vn.vudv.mydrive.oauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.205146002516-8op6ah9qpglbpnst6t3645rsdfqp0hl7</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
-	<string>13</string>
+	<string>14</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>MyDriveOAuthClientID</key>
+	<string>205146002516-8op6ah9qpglbpnst6t3645rsdfqp0hl7.apps.googleusercontent.com</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Chụp ảnh/quay video để lưu vào MyDrive.</string>
 	<key>UIApplicationSceneManifest</key>
