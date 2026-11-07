@@ -22,6 +22,8 @@ struct SharedFilesView: View {
     @State private var confirmDelete = false
     @State private var confirmDeleteTarget: String?
     @State private var previewURL: URL?
+    /// Đang nhập kho nền (spinner che thao tác, UI vẫn mượt).
+    @State private var importing = false
     @StateObject private var store = FileSystemStore.shared
 
     var body: some View {
@@ -40,6 +42,22 @@ struct SharedFilesView: View {
         .toolbar { toolbar }
         .refreshable { reload() }
         .onAppear { reload() }
+        .overlay {
+            if importing {
+                ZStack {
+                    Color.black.opacity(0.25).ignoresSafeArea()
+                    VStack(spacing: 12) {
+                        ProgressView()
+                            .scaleEffect(1.3)
+                        Text("Đang di chuyển vào MyDrive…")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(24)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                }
+            }
+        }
         .sheet(isPresented: Binding(get: { pendingMove != nil }, set: { if !$0 { pendingMove = nil } })) {
             FolderPicker(store: store, currentPath: [], title: "Di chuyển \(pendingMove?.count ?? 0) mục vào MyDrive") { dest in
                 moveSelected(to: dest)
@@ -179,54 +197,74 @@ struct SharedFilesView: View {
     }
 
     /// Nhập kho: move cả cây vào mirror tại đích, đăng ký index/journal từng cấp.
+    /// Chạy TRÊN NỀN (Task.detached) — copy file lớn không chặn UI (giống Files:
+    /// thao tác nào cũng mượt, UI chỉ hiện spinner rồi cập nhật khi xong).
     private func moveSelected(to dest: [String]) {
-        let store = FileSystemStore.shared
         let names = selectionMode && !selected.isEmpty ? Array(selected) : items.map(\.name)
-        for name in names {
-            let src = AppPaths.sharedFiles.appendingPathComponent(name)
-            guard FileManager.default.fileExists(atPath: src.path) else { continue }
-            var finalName = name
-            var n = 2
-            while store.exists(at: dest + [finalName])
-                || IndexStore.shared.node(at: (dest + [finalName]).joined(separator: "/")) != nil {
-                let base = (name as NSString).deletingPathExtension
-                let ext = (name as NSString).pathExtension
-                finalName = ext.isEmpty ? "\(base) (\(n))" : "\(base) (\(n)).\(ext)"
-                n += 1
-                if n > 999 { break }
-            }
-            let target = dest + [finalName]
-            let isDir = ((try? src.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory) ?? false
-            do {
-                if isDir {
-                    try store.copyDirectory(from: src, to: target)
-                    try FileManager.default.removeItem(at: src)
-                    registerFolder(target)
-                } else {
-                    try store.copyFile(from: src, to: target)
-                    try FileManager.default.removeItem(at: src)
-                    registerFile(target)
-                }
-                let destText = target.joined(separator: "/")
-                AppLog.log("shared", "📦 Nhập từ Shared: \(name) → \(destText)")
-            } catch {
-                AppLog.log("shared", "❌ Không nhập được \(name): \(error.localizedDescription)")
-            }
-        }
         selectionMode = false
         selected = []
-        reload()
-        store.notifyChanged()
-        SyncEngine.triggerSyncPublic()
+        importing = true
+        let store = FileSystemStore.shared
+        Task.detached(priority: .userInitiated) {
+            for name in names {
+                let src = AppPaths.sharedFiles.appendingPathComponent(name)
+                guard FileManager.default.fileExists(atPath: src.path) else { continue }
+                // Tên cuối: tránh trùng ngay từ background (đọc index — thread-safe
+                // qua serial queue bên trong IndexStore).
+                var finalName = name
+                var n = 2
+                while store.exists(at: dest + [finalName])
+                    || IndexStore.shared.node(at: (dest + [finalName]).joined(separator: "/")) != nil {
+                    let base = (name as NSString).deletingPathExtension
+                    let ext = (name as NSString).pathExtension
+                    finalName = ext.isEmpty ? "\(base) (\(n))" : "\(base) (\(n)).\(ext)"
+                    n += 1
+                    if n > 999 { break }
+                }
+                let target = dest + [finalName]
+                let isDir = ((try? src.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory) ?? false
+                do {
+                    if isDir {
+                        try store.copyDirectory(from: src, to: target)
+                        try FileManager.default.removeItem(at: src)
+                        await SharedFilesView.registerFolder(target)
+                    } else {
+                        try store.copyFile(from: src, to: target)
+                        try FileManager.default.removeItem(at: src)
+                        SharedFilesView.registerFile(target)
+                    }
+                    let destText = target.joined(separator: "/")
+                    AppLog.log("shared", "📦 Nhập từ Shared: \(name) → \(destText)")
+                } catch {
+                    AppLog.log("shared", "❌ Không nhập được \(name): \(error.localizedDescription)")
+                }
+            }
+            await MainActor.run {
+                self.importing = false
+                self.reload()
+                store.notifyChanged()
+                SyncEngine.triggerSyncPublic()
+            }
+        }
     }
 
-    private func registerFolder(_ path: [String]) {
+    /// Đăng ký file vừa nhập (static — gọi từ background).
+    private static func registerFile(_ path: [String]) {
+        let size = FileSystemStore.shared.fileSize(at: path) ?? 0
+        let key = path.joined(separator: "/")
+        IndexStore.shared.upsert(path: key, node: .init(
+            name: path.last ?? "", isDirectory: false, size: size, modified: Date(), parts: nil, rev: 1, driveFolderId: nil
+        ))
+        Journal.shared.enqueue(.uploadFile(path: key))
+    }
+
+    /// Đăng ký cả cây thư mục vừa nhập (static — gọi từ background).
+    private static func registerFolder(_ path: [String]) {
         let key = path.joined(separator: "/")
         IndexStore.shared.upsert(path: key, node: .init(
             name: path.last ?? "", isDirectory: true, size: 0, modified: Date(), parts: nil, rev: 1, driveFolderId: nil
         ))
         Journal.shared.enqueue(.createFolder(path: key))
-        // Con bên trong (nếu có) — duyệt đích mới sau khi đã move vào mirror.
         let fm = FileManager.default
         let dirURL = FileSystemStore.shared.url(for: path)
         if let enumerator = fm.enumerator(at: dirURL, includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey]) {
@@ -249,14 +287,5 @@ struct SharedFilesView: View {
                 }
             }
         }
-    }
-
-    private func registerFile(_ path: [String]) {
-        let size = FileSystemStore.shared.fileSize(at: path) ?? 0
-        let key = path.joined(separator: "/")
-        IndexStore.shared.upsert(path: key, node: .init(
-            name: path.last ?? "", isDirectory: false, size: size, modified: Date(), parts: nil, rev: 1, driveFolderId: nil
-        ))
-        Journal.shared.enqueue(.uploadFile(path: key))
     }
 }
