@@ -5,18 +5,21 @@ import UIKit
 import UniformTypeIdentifiers
 
 /// QuickLook preview (ảnh/video/pdf/text…).
+/// QLPreviewController nhúng trần vào .sheet thì KHÔNG có nút Done (không cách
+/// nào đóng, vuốt-xuống bị cử chỉ media nuốt) — phải bọc trong
+/// UINavigationController thì QL tự thêm nút "Xong" để dismiss.
 struct QuickLookView: UIViewControllerRepresentable {
     let url: URL
 
-    func makeUIViewController(context: Context) -> QLPreviewController {
+    func makeUIViewController(context: Context) -> UINavigationController {
         let vc = QLPreviewController()
         vc.dataSource = context.coordinator
-        return vc
+        return UINavigationController(rootViewController: vc)
     }
 
-    func updateUIViewController(_ vc: QLPreviewController, context: Context) {
+    func updateUIViewController(_ nav: UINavigationController, context: Context) {
         context.coordinator.url = url
-        vc.reloadData()
+        (nav.viewControllers.first as? QLPreviewController)?.reloadData()
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(url: url) }
