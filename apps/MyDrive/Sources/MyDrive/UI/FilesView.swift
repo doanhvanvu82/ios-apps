@@ -38,12 +38,13 @@ struct FilesView: View {
                                 .foregroundStyle(Theme.accent)
                         }
                     }
-                    if path.isEmpty {
-                        trashRow
-                    }
                     ForEach(entries) { entry in
                         row(entry)
                     }
+                    if path.isEmpty {
+                        trashRow
+                    }
+
                     if entries.isEmpty {
                         Text("Thư mục trống. Nhấn + để thêm ảnh/video, ghi chú, hoặc kéo file vào Inbox qua USB File Sharing.")
                             .font(.footnote)
