@@ -46,7 +46,6 @@ struct FilesView: View {
     @State private var showDocPicker = false
     @State private var showFolderPicker = false
     @State private var showInboxHint = false
-    @State private var showSharedFiles = false
     @State private var showInfoSheet = false
     @State private var renameTarget: FileSystemStore.Entry?
     @State private var previewURL: URL?
@@ -189,7 +188,6 @@ struct FilesView: View {
             .modifier(CommonSheets(
                 showTrash: $showTrash,
                 trash: trash,
-                showSharedFiles: $showSharedFiles,
                 onTabRetapped: {
                     exitSelection()
                     showTrash = false
@@ -251,7 +249,6 @@ struct FilesView: View {
                         Button { showNoteEditor = true } label: { Label("Ghi chú văn bản", systemImage: "square.and.pencil") }
                         Button { showDocPicker = true } label: { Label("Chọn tệp…", systemImage: "doc") }
                         Button { showFolderPicker = true } label: { Label("Chọn thư mục…", systemImage: "folder") }
-                        Button { showSharedFiles = true } label: { Label("Tệp chung (từ app Files)", systemImage: "arrow.left.arrow.right.square") }
                         Button { showInboxHint = true } label: { Label("Hộp thư Inbox (USB)", systemImage: "tray.and.arrow.down") }
                     }
                     Section {
@@ -865,16 +862,12 @@ struct FilesView: View {
 struct CommonSheets: ViewModifier {
     @Binding var showTrash: Bool
     @ObservedObject var trash: TrashStore
-    @Binding var showSharedFiles: Bool
     let onTabRetapped: () -> Void
 
     func body(content: Content) -> some View {
         content
             .sheet(isPresented: $showTrash) {
                 RecentlyDeletedView(trash: trash)
-            }
-            .sheet(isPresented: $showSharedFiles) {
-                NavigationStack { SharedFilesView() }
             }
             .onReceive(NotificationCenter.default.publisher(for: .myDriveTabRetapped)) { note in
                 // Bấm lại tab Tệp khi đang ở thư mục con → về root (như app Files).

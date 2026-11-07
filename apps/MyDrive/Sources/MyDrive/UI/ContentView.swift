@@ -9,12 +9,15 @@ struct ContentView: View {
             FilesView()
                 .tabItem { Label("Tệp", systemImage: "folder") }
                 .tag(0)
+            SharedTabView()
+                .tabItem { Label("Được chia sẻ", systemImage: "person.2") }
+                .tag(1)
             AccountsView()
                 .tabItem { Label("Tài khoản", systemImage: "person.crop.circle") }
-                .tag(1)
+                .tag(2)
             SettingsView()
                 .tabItem { Label("Cài đặt", systemImage: "gearshape") }
-                .tag(2)
+                .tag(3)
         }
         .onOpenURL { url in
             // "Copy to MyDrive" từ share sheet app khác: nhập ngay vào Inbox.

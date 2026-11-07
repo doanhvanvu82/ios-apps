@@ -1,9 +1,19 @@
 import SwiftUI
 
+/// Tab "Được chia sẻ": thấy luôn nội dung bãi trung chuyển Documents/Shared
+/// (dùng chung với app Files, KHÔNG đồng bộ). Nhập kho qua "Di chuyển vào MyDrive".
+struct SharedTabView: View {
+    var body: some View {
+        NavigationStack {
+            SharedFilesView()
+        }
+    }
+}
+
 /// Bãi trung chuyển chung với app Files: Documents/Shared (kế bên Logs).
 /// Người dùng copy file/thư mục từ Files vào đây — nội dung KHÔNG đồng bộ.
-/// Mở màn này để chọn mục rồi "Di chuyển vào MyDrive" (chọn đích) — lúc đó
-/// mới nhập kho: move vào mirror + đăng ký index/journal + sync.
+/// Vào tab này thấy luôn các mục; chọn rồi "Di chuyển vào MyDrive" (chọn đích)
+/// — lúc đó mới nhập kho: move vào mirror + đăng ký index/journal + sync.
 struct SharedFilesView: View {
     @State private var items: [FileSystemStore.Entry] = []
     @State private var selectionMode = false
@@ -11,6 +21,7 @@ struct SharedFilesView: View {
     @State private var pendingMove: [String]?
     @State private var confirmDelete = false
     @State private var confirmDeleteTarget: String?
+    @State private var previewURL: URL?
     @StateObject private var store = FileSystemStore.shared
 
     var body: some View {
@@ -24,7 +35,7 @@ struct SharedFilesView: View {
                 row(entry)
             }
         }
-        .navigationTitle("Tệp chung (chưa đồng bộ)")
+        .navigationTitle("Được chia sẻ")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
         .refreshable { reload() }
@@ -58,6 +69,25 @@ struct SharedFilesView: View {
         } message: {
             Text("Xóa khỏi Shared — không liên quan Drive (mục chưa từng đồng bộ).")
         }
+        .sheet(isPresented: Binding(
+            get: { previewURL != nil },
+            set: { if !$0 { previewURL = nil } }
+        )) {
+            if let url = previewURL {
+                QuickLookView(urls: [url], onDone: { previewURL = nil })
+                    .ignoresSafeArea()
+            }
+        }
+    }
+
+    /// Nút "Di chuyển vào MyDrive" — hành động chính của tab.
+    private var moveButton: some View {
+        Button {
+            pendingMove = selectionMode && !selected.isEmpty ? Array(selected) : items.map(\.name)
+        } label: {
+            Label("Di chuyển vào MyDrive", systemImage: "arrow.right.circle")
+        }
+        .disabled(items.isEmpty)
     }
 
     private var toolbar: some ToolbarContent {
@@ -72,6 +102,7 @@ struct SharedFilesView: View {
                     selected = []
                 }
             }
+            moveButton
         }
     }
 
@@ -106,6 +137,12 @@ struct SharedFilesView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if !entry.isDirectory {
+                    previewURL = AppPaths.sharedFiles.appendingPathComponent(entry.name)
+                }
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                 Button(role: .destructive) {
