@@ -96,12 +96,13 @@ struct FilesView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                if isSelecting {
-                    selectionBar
-                }
             }
-            .navigationTitle(path.last ?? "MyDrive")
+            .navigationTitle(isSelecting ? "\(selectedPaths.count) Mục" : (path.last ?? "MyDrive"))
             .navigationBarTitleDisplayMode(.inline)
+            // Cơ chế Files: vào selection → tab bar ẨN, thanh hành động .bottomBar
+            // chiếm chỗ; thoát → tab bar hiện lại. (Trước chỉ thiếu dòng này nên
+            // bottomBar đè lên tab bar.)
+            .toolbar(isSelecting ? .hidden : .visible, for: .tabBar)
             .searchable(text: $searchText, prompt: "Tìm trong thư mục này")
             .onChange(of: searchText) { _ in
                 exitSelection()
@@ -208,12 +209,7 @@ struct FilesView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
-            if isSelecting {
-                // Như Files: "Chọn tất cả" pill bên trái khi đang chọn.
-                Button(selectedPaths.isEmpty ? "Chọn tất cả" : "Bỏ chọn") {
-                    toggleSelectAll()
-                }
-            } else if engine.status.isWorking {
+            if engine.status.isWorking {
                 ProgressView()
             } else if searchText.isEmpty {
                 Menu {
@@ -235,7 +231,7 @@ struct FilesView: View {
         }
         ToolbarItem(placement: .topBarTrailing) {
             if isSelecting {
-                // Như Files: nút checkmark tròn bên phải = thoát selection.
+                // Như Files: nút checkmark tròn = kết thúc selection.
                 Button {
                     exitSelection()
                 } label: {
@@ -270,40 +266,38 @@ struct FilesView: View {
                 }
             }
         }
-    }
-
-    /// Thanh hành động khi chọn nhiều — pill LIQUID GLASS nổi phía dưới
-    /// (giống Files: share · copy · move · trash). Không dùng toolbar .bottomBar
-    /// (bị đè lên tab bar) cũng không nền .bar (làm mất kiểu glass).
-    private var selectionBar: some View {
-        HStack(spacing: 26) {
-            Button {
-                shareSelected()
-            } label: {
-                Image(systemName: "square.and.arrow.up")
+        // Thanh hành động selection — chiếm chỗ tab bar đã ẩn (chuẩn Files).
+        ToolbarItemGroup(placement: .bottomBar) {
+            if isSelecting {
+                Button {
+                    shareSelected()
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                }
+                .disabled(shareableURLs.isEmpty)
+                Spacer()
+                Button {
+                    pendingCopy = Array(selectedPaths)
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                }
+                .disabled(selectedPaths.isEmpty)
+                Spacer()
+                Button {
+                    pendingMove = Array(selectedPaths)
+                } label: {
+                    Image(systemName: "folder")
+                }
+                .disabled(selectedPaths.isEmpty)
+                Spacer()
+                Button(role: .destructive) {
+                    confirmDeleteSelection = true
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .disabled(selectedPaths.isEmpty)
             }
-            .disabled(shareableURLs.isEmpty)
-            Button {
-                pendingCopy = Array(selectedPaths)
-            } label: {
-                Image(systemName: "doc.on.doc")
-            }
-            .disabled(selectedPaths.isEmpty)
-            Button {
-                pendingMove = Array(selectedPaths)
-            } label: {
-                Image(systemName: "folder")
-            }
-            .disabled(selectedPaths.isEmpty)
-            Button(role: .destructive) {
-                confirmDeleteSelection = true
-            } label: {
-                Image(systemName: "trash")
-            }
-            .disabled(selectedPaths.isEmpty)
         }
-        .font(.system(size: 19, weight: .medium))
-        .modifier(GlassCapsule())
     }
 
     // MARK: - Danh sách (sắp xếp / tìm kiếm)
