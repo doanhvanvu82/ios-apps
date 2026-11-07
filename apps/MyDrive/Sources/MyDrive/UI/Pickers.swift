@@ -28,9 +28,13 @@ struct QuickLookView: UIViewControllerRepresentable {
         context.coordinator.onDone = onDone
         let vc = QLPreviewController()
         vc.dataSource = context.coordinator
-        vc.navigationItem.rightBarButtonItem = UIBarButtonItem(
-            title: "Xong", style: .done,
-            target: context.coordinator, action: #selector(Coordinator.doneTapped)
+        // Nút đóng = X ở BÊN TRÁI (như app Files). Đừng thêm gì bên phải — QL đã
+        // có Share + List, thêm nữa bị iOS gộp thành menu "…" 3 chấm.
+        vc.navigationItem.leftBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "xmark"),
+            style: .plain,
+            target: context.coordinator,
+            action: #selector(Coordinator.doneTapped)
         )
         return UINavigationController(rootViewController: vc)
     }
