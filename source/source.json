@@ -11,75 +11,19 @@
       "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
       "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker.png",
       "tintColor": "#738CFF",
-      "version": "1.68",
+      "version": "1.69",
       "versionDate": "2026-11-07",
-      "versionDescription": "Build 68",
-      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.68.ipa",
-      "size": 1982836,
+      "versionDescription": "Build 69",
+      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.69-69.ipa",
+      "size": 2020519,
       "versions": [
         {
-          "version": "1.68",
-          "buildVersion": "68",
-          "date": "2026-11-07T16:44:53+00:00",
-          "localizedDescription": "Build 68",
-          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.68.ipa",
-          "size": 1982836
-        }
-      ],
-      "appPermissions": {
-        "entitlements": [],
-        "privacy": {}
-      }
-    },
-    {
-      "name": "Game Hub",
-      "bundleIdentifier": "vn.vudv.gamehub",
-      "developerName": "vudv",
-      "subtitle": "Bản build từ máy tính",
-      "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
-      "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub.png",
-      "tintColor": "#738CFF",
-      "version": "2.30",
-      "versionDate": "2026-11-07",
-      "versionDescription": "Build 130",
-      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub-2.30.ipa",
-      "size": 74762213,
-      "versions": [
-        {
-          "version": "2.30",
-          "buildVersion": "130",
-          "date": "2026-11-07T16:44:53+00:00",
-          "localizedDescription": "Build 130",
-          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub-2.30.ipa",
-          "size": 74762213
-        }
-      ],
-      "appPermissions": {
-        "entitlements": [],
-        "privacy": {}
-      }
-    },
-    {
-      "name": "Mangalate",
-      "bundleIdentifier": "vn.vudv.mangalate",
-      "developerName": "vudv",
-      "subtitle": "Bản build từ máy tính",
-      "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
-      "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate.png",
-      "tintColor": "#738CFF",
-      "version": "1.66",
-      "versionDate": "2026-11-07",
-      "versionDescription": "Build 66",
-      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate-1.66.ipa",
-      "size": 283099,
-      "versions": [
-        {
-          "version": "1.66",
-          "buildVersion": "66",
-          "date": "2026-11-07T16:44:53+00:00",
-          "localizedDescription": "Build 66",
-          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate-1.66.ipa",
-          "size": 283099
+          "version": "1.69",
+          "buildVersion": "69",
+          "date": "2026-11-07T19:33:37+00:00",
+          "localizedDescription": "Build 69",
+          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.69-69.ipa",
+          "size": 2020519
         }
       ],
       "appPermissions": {
@@ -95,19 +39,103 @@
       "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
       "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/MyDrive.png",
       "tintColor": "#738CFF",
-      "version": "1.76",
+      "version": "1.77",
       "versionDate": "2026-11-07",
-      "versionDescription": "Build 76",
-      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/MyDrive-1.76.ipa",
-      "size": 1049620,
+      "versionDescription": "Build 77",
+      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/MyDrive-1.77-77.ipa",
+      "size": 1108676,
       "versions": [
         {
-          "version": "1.76",
-          "buildVersion": "76",
-          "date": "2026-11-07T16:44:53+00:00",
-          "localizedDescription": "Build 76",
-          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/MyDrive-1.76.ipa",
-          "size": 1049620
+          "version": "1.77",
+          "buildVersion": "77",
+          "date": "2026-11-07T19:33:37+00:00",
+          "localizedDescription": "Build 77",
+          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/MyDrive-1.77-77.ipa",
+          "size": 1108676
+        }
+      ],
+      "appPermissions": {
+        "entitlements": [],
+        "privacy": {}
+      }
+    },
+    {
+      "name": "Mangalate",
+      "bundleIdentifier": "vn.vudv.mangalate",
+      "developerName": "vudv",
+      "subtitle": "Bản build từ máy tính",
+      "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
+      "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate.png",
+      "tintColor": "#738CFF",
+      "version": "1.67",
+      "versionDate": "2026-11-07",
+      "versionDescription": "Build 67",
+      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate-1.67-67.ipa",
+      "size": 287162,
+      "versions": [
+        {
+          "version": "1.67",
+          "buildVersion": "67",
+          "date": "2026-11-07T19:33:37+00:00",
+          "localizedDescription": "Build 67",
+          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate-1.67-67.ipa",
+          "size": 287162
+        }
+      ],
+      "appPermissions": {
+        "entitlements": [],
+        "privacy": {}
+      }
+    },
+    {
+      "name": "Game Hub",
+      "bundleIdentifier": "vn.vudv.gamehub",
+      "developerName": "vudv",
+      "subtitle": "Bản build từ máy tính",
+      "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
+      "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub.png",
+      "tintColor": "#738CFF",
+      "version": "2.31",
+      "versionDate": "2026-11-07",
+      "versionDescription": "Build 131",
+      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub-2.31-131.ipa",
+      "size": 74845146,
+      "versions": [
+        {
+          "version": "2.31",
+          "buildVersion": "131",
+          "date": "2026-11-07T19:33:37+00:00",
+          "localizedDescription": "Build 131",
+          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub-2.31-131.ipa",
+          "size": 74845146
+        }
+      ],
+      "appPermissions": {
+        "entitlements": [],
+        "privacy": {}
+      }
+    },
+    {
+      "name": "YouTube Mod",
+      "bundleIdentifier": "vn.vudv.youtube.mod",
+      "developerName": "vudv",
+      "subtitle": "Bản build từ máy tính",
+      "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
+      "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/YouTubeMod.png",
+      "tintColor": "#738CFF",
+      "version": "21.44.4",
+      "versionDate": "2026-11-07",
+      "versionDescription": "Build 1794079972",
+      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/YouTubeMod-21.44.4-1794079972.ipa",
+      "size": 135387705,
+      "versions": [
+        {
+          "version": "21.44.4",
+          "buildVersion": "1794079972",
+          "date": "2026-11-07T19:33:37+00:00",
+          "localizedDescription": "Build 1794079972",
+          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/YouTubeMod-21.44.4-1794079972.ipa",
+          "size": 135387705
         }
       ],
       "appPermissions": {
