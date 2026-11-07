@@ -88,7 +88,8 @@ build-exclude.txt  — mục KHÔNG build tự động (CI + toolkit/build_all.s
 ```
 
 CI: `.github/workflows/build.yml` build app + mod trên push/PR, upload IPA thành artifact;
-publish lên Releases chỉ khi chạy `workflow_dispatch` với `publish=true` (dùng `secrets.YOUTUBE_IPA_URL`).
+publish lên Releases chỉ khi chạy `workflow_dispatch` với `publish=true`. IPA nguồn cho mod nằm ở
+repo private `doanhvanvu82/ios-mod-sources`, CI tải bằng `secrets.SOURCE_IPA_TOKEN`.
 
 Không commit: `.build/`, `xtool/`, `*.ipa`, `apps/GameHub/workspace/` (21 GB dữ liệu build game),
 bộ lọc sinh lúc build, `toolkit/xtool.AppImage`, `.state/`, `sidestore/`, `mods/*/work/`, `mods/*/out/`,

@@ -42,8 +42,12 @@ env:
   ONLY: ${{ inputs.only || '' }}
   CLEAN: ${{ inputs.clean && '1' || '0' }}
   CONTINUE_ON_ERROR: '1'
-  # IPA nguồn cho mods (repo không chứa): đặt secret YOUTUBE_IPA_URL.
+  # IPA nguồn cho mods (repo không chứa):
+  #  - SOURCE_IPA_TOKEN: PAT đọc repo private doanhvanvu82/ios-mod-sources
+  #    (bước "Tải IPA nguồn" tải release asset về và đặt IPA=…)
+  #  - YOUTUBE_IPA_URL: tuỳ chọn, URL công khai nếu không dùng repo private
   IPA_URL: ${{ secrets.YOUTUBE_IPA_URL }}
+  SOURCE_IPA_TOKEN: ${{ secrets.SOURCE_IPA_TOKEN }}
   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
@@ -134,6 +138,23 @@ jobs:
           command -v python3 zip unzip
           python3 -c 'import PIL; print("Pillow", PIL.__version__)'
           command -v node >/dev/null && node --version || echo "⚠️ thiếu node (AdsBlocker bỏ qua bộ lọc mới)"
+
+      - name: Tải IPA nguồn cho mod (repo private)
+        # IPA đã giải mã không nằm trong repo (133 MB, bản quyền) — để ở
+        # doanhvanvu82/ios-mod-sources (private), tải bằng PAT trong secret
+        # SOURCE_IPA_TOKEN. Bỏ qua nếu không có secret hoặc chỉ build apps.
+        if: env.SOURCE_IPA_TOKEN != '' && env.SCOPE != 'apps'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.SOURCE_IPA_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p .state/ipa
+          gh release download sources --repo doanhvanvu82/ios-mod-sources \
+            --pattern '*.ipa' --dir .state/ipa --clobber
+          f="$(ls .state/ipa/*.ipa | head -1)"
+          echo "→ IPA nguồn: $f ($(du -h "$f" | cut -f1))"
+          echo "IPA=$PWD/$f" >> "$GITHUB_ENV"
 
       - name: Build apps & mods
         shell: bash

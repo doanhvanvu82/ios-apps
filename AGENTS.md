@@ -86,7 +86,8 @@ mods/youtube/build.sh --check  # exit 3 nếu thiếu IPA gốc (build_all.sh d�
 - `toolkit/build_all.sh [apps|mods]` build mọi app + mod; `build-exclude.txt` (gốc repo) loại trừ mục không build tự động
   (hiện: `cherrytale` — cần IPA 1,4 GB + dump.cs sinh trên máy).
 - CI: `.github/workflows/build.yml` build app + mod, upload artifact `ipa-<run>`; publish tay bằng workflow_dispatch
-  (`publish=true`, dùng `secrets.YOUTUBE_IPA_URL`).
+  (`publish=true`). IPA YouTube gốc giữ ở repo private `doanhvanvu82/ios-mod-sources`, CI tải bằng
+  `secrets.SOURCE_IPA_TOKEN` (hoặc đặt `secrets.YOUTUBE_IPA_URL`).
 - Log trên máy: dylib ghi `Documents/Logs/<ngày>.log`, lấy bằng `toolkit/pull_app_logs.sh <bundleID>`.
 
 ## Cài lên iPhone

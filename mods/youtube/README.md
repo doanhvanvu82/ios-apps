@@ -123,5 +123,13 @@ runtime lệch với dump — gửi log lại để chỉnh hook.
 ## CI (GitHub Actions)
 
 `.github/workflows/build.yml` build app + mod trên push/PR. IPA YouTube gốc không
-nằm trong repo nên đặt secret **`YOUTUBE_IPA_URL`** (link tải IPA đã giải mã).
+nằm trong repo (133 MB, bản quyền) và repo này public, nên IPA được giữ ở
+**repo private `doanhvanvu82/ios-mod-sources`** (release `sources`). Workflow
+tải về bằng `gh release download` với secret **`SOURCE_IPA_TOKEN`** (PAT có
+quyền đọc repo đó) rồi đặt `IPA=…`; không có secret thì bước tải bị bỏ qua và
+mod bị `skip (thiếu IPA gốc)`.
+
+Cách khác: đặt secret `YOUTUBE_IPA_URL` (URL tải công khai) — `build.sh` tự
+`curl` về `work/`.
+
 Publish lên Releases chỉ chạy tay: `workflow_dispatch` → `publish=true`.
