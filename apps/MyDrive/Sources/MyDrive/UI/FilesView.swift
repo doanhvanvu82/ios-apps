@@ -2,8 +2,35 @@ import SwiftUI
 import QuickLook
 import UniformTypeIdentifiers
 
+/// Kiểu sắp xếp (nhớ lựa chọn qua AppStorage).
+enum SortOption: Int, CaseIterable, Identifiable {
+    case nameAsc, nameDesc, dateNew, dateOld, sizeAsc, sizeDesc
+    var id: Int { rawValue }
+    var label: String {
+        switch self {
+        case .nameAsc: return "Tên A→Z"
+        case .nameDesc: return "Tên Z→A"
+        case .dateNew: return "Mới nhất"
+        case .dateOld: return "Cũ nhất"
+        case .sizeAsc: return "Nhỏ nhất"
+        case .sizeDesc: return "Lớn nhất"
+        }
+    }
+    var icon: String {
+        switch self {
+        case .nameAsc: return "textformat.abc"
+        case .nameDesc: return "textformat.size"
+        case .dateNew: return "arrow.down"
+        case .dateOld: return "arrow.up"
+        case .sizeAsc: return "arrow.up.right"
+        case .sizeDesc: return "arrow.down.right"
+        }
+    }
+}
+
 /// Màn chính: duyệt cây thư mục mirror. Navigation bằng state `path`
 /// (không dùng NavigationLink để state không reset khi vào thư mục con).
+/// Hỗ trợ: chọn nhiều, sắp xếp, tìm trong cây, nhân đôi, thông tin, sao chép vào…
 struct FilesView: View {
     @StateObject private var store = FileSystemStore.shared
     @StateObject private var engine = SyncEngine.shared
@@ -20,18 +47,31 @@ struct FilesView: View {
     @State private var showFolderPicker = false
     @State private var showInboxHint = false
     @State private var renameTarget: FileSystemStore.Entry?
-    @State private var moveTarget: FileSystemStore.Entry?
     @State private var previewURL: URL?
     @State private var previewURLs: [URL] = []
-    @State private var shareURL: URL?
+    @State private var shareURLs: [URL]?
     @State private var showTrash = false
+
+    // Chọn nhiều + hành động hàng loạt
+    @State private var selectionMode = false
+    @State private var selectedPaths: Set<String> = []
+    @State private var confirmDeleteSelection = false
+
+    // Di chuyển / sao chép (1 hoặc nhiều mục)
+    @State private var pendingMove: [String]?
+    @State private var pendingCopy: [String]?
+
+    // Sắp xếp + tìm kiếm + thông tin
+    @AppStorage("mydSort") private var sortRaw = SortOption.nameAsc.rawValue
+    @State private var searchText = ""
+    @State private var infoPath: String?
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 SyncStatusBanner(status: engine.status)
                 List {
-                    if !path.isEmpty {
+                    if !path.isEmpty && searchText.isEmpty {
                         Button {
                             if !path.isEmpty { _ = path.popLast() }
                         } label: {
@@ -39,15 +79,16 @@ struct FilesView: View {
                                 .foregroundStyle(Theme.accent)
                         }
                     }
-                    ForEach(entries) { entry in
-                        row(entry)
-                    }
-                    if path.isEmpty {
+                    if path.isEmpty && searchText.isEmpty {
                         trashRow
                     }
-
-                    if entries.isEmpty {
-                        Text("Thư mục trống. Nhấn + để thêm ảnh/video, ghi chú, hoặc kéo file vào Inbox qua USB File Sharing.")
+                    ForEach(listing, id: \.key) { item in
+                        row(item)
+                    }
+                    if listing.isEmpty {
+                        Text(searchText.isEmpty
+                             ? "Thư mục trống. Nhấn + để thêm ảnh/video, ghi chú, hoặc kéo file vào Inbox qua USB File Sharing."
+                             : "Không tìm thấy \"\(searchText)\" trong thư mục này.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -55,33 +96,24 @@ struct FilesView: View {
             }
             .navigationTitle(path.last ?? "MyDrive")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    if engine.status.isWorking { ProgressView() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Section("Thêm nội dung") {
-                            Button { showPHPicker = true } label: { Label("Ảnh/Video…", systemImage: "photo.on.rectangle") }
-                            Button { showCamera = .photo } label: { Label("Chụp ảnh", systemImage: "camera") }
-                            Button { showCamera = .video } label: { Label("Quay video", systemImage: "video") }
-                            Button { showNoteEditor = true } label: { Label("Ghi chú văn bản", systemImage: "square.and.pencil") }
-                            Button { showDocPicker = true } label: { Label("Chọn tệp…", systemImage: "doc") }
-                            Button { showFolderPicker = true } label: { Label("Chọn thư mục…", systemImage: "folder") }
-                            Button { showInboxHint = true } label: { Label("Hộp thư Inbox (USB)", systemImage: "tray.and.arrow.down") }
-                        }
-                        Section {
-                            Button { showNewFolder = true } label: { Label("Thư mục mới", systemImage: "folder.badge.plus") }
-                        }
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                }
+            .searchable(text: $searchText, prompt: "Tìm trong thư mục này")
+            .onChange(of: searchText) { _ in
+                exitSelection()
             }
+            .onChange(of: path) { _ in
+                exitSelection()
+            }
+            .toolbar { toolbarContent }
             .alert("Thư mục mới", isPresented: $showNewFolder) {
                 TextField("Tên thư mục", text: $newFolderName)
                 Button("Tạo") { createFolder() }
                 Button("Huỷ", role: .cancel) {}
+            }
+            .alert("Xóa \(selectedPaths.count) mục?", isPresented: $confirmDeleteSelection) {
+                Button("Xóa", role: .destructive) { deleteSelected() }
+                Button("Huỷ", role: .cancel) {}
+            } message: {
+                Text("Các mục sẽ chuyển vào Đã xóa gần đây (giữ 30 ngày).")
             }
             .alert("Hộp thư Inbox", isPresented: $showInboxHint) {
                 Button("Đã hiểu") {}
@@ -118,9 +150,21 @@ struct FilesView: View {
                     commitRename(entry, newName)
                 }
             }
-            .sheet(item: $moveTarget) { entry in
-                FolderPicker(store: store, currentPath: path, title: "Di chuyển \"\(entry.name)\"") { dest in
-                    moveEntry(entry, to: dest)
+            .sheet(isPresented: Binding(get: { pendingMove != nil }, set: { if !$0 { pendingMove = nil } })) {
+                FolderPicker(store: store, currentPath: path, title: "Di chuyển \(pendingMove?.count ?? 0) mục") { dest in
+                    moveEntries(pendingMove ?? [], to: dest)
+                    pendingMove = nil
+                }
+            }
+            .sheet(isPresented: Binding(get: { pendingCopy != nil }, set: { if !$0 { pendingCopy = nil } })) {
+                FolderPicker(store: store, currentPath: path, title: "Sao chép \(pendingCopy?.count ?? 0) mục") { dest in
+                    copyEntries(pendingCopy ?? [], to: dest)
+                    pendingCopy = nil
+                }
+            }
+            .sheet(isPresented: Binding(get: { shareURLs != nil }, set: { if !$0 { shareURLs = nil } })) {
+                if let urls = shareURLs {
+                    ShareSheet(items: urls)
                 }
             }
             .sheet(isPresented: Binding(get: { previewURL != nil }, set: { if !$0 { previewURL = nil } })) {
@@ -133,25 +177,329 @@ struct FilesView: View {
                     .ignoresSafeArea()
                 }
             }
-            .sheet(isPresented: Binding(get: { shareURL != nil }, set: { if !$0 { shareURL = nil } })) {
-                if let url = shareURL {
-                    ShareSheet(items: [url])
+            .sheet(isPresented: Binding(get: { infoPath != nil }, set: { if !$0 { infoPath = nil } })) {
+                if let p = infoPath {
+                    InfoView(path: p)
                 }
             }
-            .navigationDestination(isPresented: Binding(
-                get: { showTrash },
-                set: { showTrash = $0 }
-            )) {
+            .sheet(isPresented: Binding(get: { showTrash }, set: { showTrash = $0 })) {
                 RecentlyDeletedView(trash: trash)
             }
             .onReceive(NotificationCenter.default.publisher(for: .myDriveTabRetapped)) { note in
                 // Bấm lại tab Tệp khi đang ở thư mục con → về root (như app Files).
                 guard (note.object as? Int) == 0 else { return }
-                showTrash = false   // pop màn Đã xóa gần đây nếu đang mở
+                exitSelection()
+                showTrash = false
                 previewURL = nil
-                shareURL = nil
+                shareURLs = nil
+                searchText = ""
                 path = []
             }
+        }
+    }
+
+    // MARK: - Toolbar
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            if engine.status.isWorking {
+                ProgressView()
+            } else if searchText.isEmpty {
+                Menu {
+                    ForEach(SortOption.allCases) { opt in
+                        Button {
+                            sortRaw = opt.rawValue
+                        } label: {
+                            if opt.rawValue == sortRaw {
+                                Label(opt.label, systemImage: "checkmark")
+                            } else {
+                                Text(opt.label)
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                }
+            }
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            if isSelecting {
+                Button(selectedPaths.isEmpty ? "Chọn tất cả" : "Bỏ chọn") {
+                    toggleSelectAll()
+                }
+            } else if searchText.isEmpty {
+                Button {
+                    selectionMode = true
+                    selectedPaths = []
+                } label: {
+                    Text("Chọn")
+                }
+            }
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            if !isSelecting && searchText.isEmpty {
+                Menu {
+                    Section("Thêm nội dung") {
+                        Button { showPHPicker = true } label: { Label("Ảnh/Video…", systemImage: "photo.on.rectangle") }
+                        Button { showCamera = .photo } label: { Label("Chụp ảnh", systemImage: "camera") }
+                        Button { showCamera = .video } label: { Label("Quay video", systemImage: "video") }
+                        Button { showNoteEditor = true } label: { Label("Ghi chú văn bản", systemImage: "square.and.pencil") }
+                        Button { showDocPicker = true } label: { Label("Chọn tệp…", systemImage: "doc") }
+                        Button { showFolderPicker = true } label: { Label("Chọn thư mục…", systemImage: "folder") }
+                        Button { showInboxHint = true } label: { Label("Hộp thư Inbox (USB)", systemImage: "tray.and.arrow.down") }
+                    }
+                    Section {
+                        Button { showNewFolder = true } label: { Label("Thư mục mới", systemImage: "folder.badge.plus") }
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                }
+            }
+        }
+        ToolbarItemGroup(placement: .bottomBar) {
+            if isSelecting {
+                Button {
+                    shareSelected()
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                }
+                .disabled(shareableURLs.isEmpty)
+                Spacer()
+                Button {
+                    pendingMove = Array(selectedPaths)
+                } label: {
+                    Image(systemName: "folder")
+                }
+                .disabled(selectedPaths.isEmpty)
+                Spacer()
+                Button {
+                    pendingCopy = Array(selectedPaths)
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                }
+                .disabled(selectedPaths.isEmpty)
+                Spacer()
+                Text("\(selectedPaths.count) mục")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button(role: .destructive) {
+                    confirmDeleteSelection = true
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .disabled(selectedPaths.isEmpty)
+            }
+        }
+    }
+
+    // MARK: - Danh sách (sắp xếp / tìm kiếm)
+
+    private var isSelecting: Bool {
+        selectionMode && searchText.isEmpty
+    }
+
+    /// Mục hiển thị: đang tìm → kết quả trong CÂY con (theo index);
+    /// không → nội dung thư mục hiện tại (thư mục đứng trước, theo kiểu sắp xếp).
+    private var listing: [SearchItem] {
+        _ = store.changeToken
+        if !searchText.isEmpty {
+            let prefixKey = path.joined(separator: "/")
+            let prefix = prefixKey.isEmpty ? "" : prefixKey + "/"
+            return IndexStore.shared.allNodes().compactMap { pair in
+                let (key, node) = pair
+                guard key != prefixKey, key.hasPrefix(prefix) else { return nil }
+                guard node.name.localizedCaseInsensitiveContains(searchText) else { return nil }
+                return SearchItem(
+                    key: key,
+                    entry: .init(name: node.name, isDirectory: node.isDirectory,
+                                 size: node.size, modified: node.modified ?? Date()),
+                    relativePath: String(key.dropFirst(prefix.count))
+                )
+            }
+            .sorted {
+                if $0.entry.isDirectory != $1.entry.isDirectory { return $0.entry.isDirectory }
+                return $0.entry.name.localizedStandardCompare($1.entry.name) == .orderedAscending
+            }
+        }
+        let list = (try? store.listDirectory(path)) ?? []
+        let folders = list.filter(\.isDirectory)
+        let files = list.filter { !$0.isDirectory }
+        let opt = SortOption(rawValue: sortRaw) ?? .nameAsc
+        func sorted(_ arr: [FileSystemStore.Entry]) -> [FileSystemStore.Entry] {
+            switch opt {
+            case .nameAsc: return arr.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            case .nameDesc: return arr.sorted { $0.name.localizedStandardCompare($1.name) == .orderedDescending }
+            case .dateNew: return arr.sorted { $0.modified > $1.modified }
+            case .dateOld: return arr.sorted { $0.modified < $1.modified }
+            case .sizeAsc: return arr.sorted { $0.size < $1.size }
+            case .sizeDesc: return arr.sorted { $0.size > $1.size }
+            }
+        }
+        return (sorted(folders) + sorted(files)).map {
+            SearchItem(key: (path + [$0.name]).joined(separator: "/"),
+                       entry: $0, relativePath: $0.name)
+        }
+    }
+
+    private struct SearchItem: Identifiable, Hashable {
+        let key: String
+        let entry: FileSystemStore.Entry
+        let relativePath: String
+        var id: String { key }
+    }
+
+    // MARK: - Row
+
+    @ViewBuilder
+    private func row(_ item: SearchItem) -> some View {
+        let entry = item.entry
+        let comps = item.key.components
+        let childPath = comps
+
+        if isSelecting {
+            Button {
+                toggleSelection(item.key)
+            } label: {
+                HStack {
+                    Image(systemName: selectedPaths.contains(item.key) ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(selectedPaths.contains(item.key) ? Theme.accent : Color.secondary)
+                        .font(.body)
+                    Image(systemName: entry.isDirectory ? "folder.fill" : icon(for: entry.name))
+                        .foregroundStyle(entry.isDirectory ? Theme.accent : Color.secondary)
+                        .frame(width: 28)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.name)
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        if !searchText.isEmpty {
+                            Text(item.relativePath)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                    Spacer()
+                    if !entry.isDirectory {
+                        Text(ByteFmt.string(entry.size))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        } else {
+            HStack {
+                Image(systemName: entry.isDirectory ? "folder.fill" : icon(for: entry.name))
+                    .foregroundStyle(entry.isDirectory ? Theme.accent : Color.secondary)
+                    .frame(width: 28)
+                if entry.isDirectory {
+                    Button {
+                        path = comps
+                    } label: {
+                        HStack {
+                            Text(entry.name)
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                } else {
+                    Button {
+                        openFile(comps)
+                    } label: {
+                        HStack {
+                            Text(entry.name)
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                            Spacer()
+                            Text(ByteFmt.string(entry.size))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                Button(role: .destructive) {
+                    deleteEntry(entry, comps)
+                } label: {
+                    Label("Xóa", systemImage: "trash")
+                }
+            }
+            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                if !entry.isDirectory {
+                    Button {
+                        shareURLs = [store.url(for: comps)]
+                    } label: {
+                        Label("Chia sẻ", systemImage: "square.and.arrow.up")
+                    }
+                    .tint(Theme.accent)
+                }
+            }
+            .contextMenu { menuItems(entry, comps) }
+        }
+    }
+
+    @ViewBuilder
+    private func menuItems(_ entry: FileSystemStore.Entry, _ childPath: [String]) -> some View {
+        Button {
+            selectionMode = true
+            selectedPaths = [childPath.joined(separator: "/")]
+        } label: {
+            Label("Chọn", systemImage: "checkmark.circle")
+        }
+        if !entry.isDirectory {
+            Button {
+                shareURLs = [store.url(for: childPath)]
+            } label: {
+                Label("Chia sẻ", systemImage: "square.and.arrow.up")
+            }
+        }
+        Button {
+            renameTarget = entry
+        } label: {
+            Label("Đổi tên", systemImage: "pencil")
+        }
+        Button {
+            pendingMove = [childPath.joined(separator: "/")]
+        } label: {
+            Label("Di chuyển", systemImage: "arrowshape.turn.up.right")
+        }
+        Button {
+            pendingCopy = [childPath.joined(separator: "/")]
+        } label: {
+            Label("Sao chép vào…", systemImage: "doc.on.doc")
+        }
+        Button {
+            duplicateEntry(entry, childPath)
+        } label: {
+            Label("Nhân đôi", systemImage: "plus.square.on.square")
+        }
+        Button {
+            infoPath = childPath.joined(separator: "/")
+        } label: {
+            Label("Thông tin", systemImage: "info.circle")
+        }
+        Divider()
+        Button(role: .destructive) {
+            deleteEntry(entry, childPath)
+        } label: {
+            Label("Xóa", systemImage: "trash")
+        }
+    }
+
+    private func icon(for name: String) -> String {
+        switch (name as NSString).pathExtension.lowercased() {
+        case "jpg", "jpeg", "png", "gif", "heic", "webp": return "photo"
+        case "mp4", "mov", "mkv", "avi", "webm": return "video"
+        case "mp3", "m4a", "wav", "flac": return "music.note"
+        case "pdf": return "doc.richtext"
+        case "txt", "md": return "doc.plaintext"
+        case "zip", "rar", "7z", "tar", "gz": return "doc.zipper"
+        default: return "doc"
         }
     }
 
@@ -180,100 +528,122 @@ struct FilesView: View {
         }
     }
 
-    private var entries: [FileSystemStore.Entry] {
-        _ = store.changeToken   // đăng ký quan sát — mirror đổi là list tự reload
-        return (try? store.listDirectory(path)) ?? []
+    // MARK: - Mở file (preview danh sách cùng thư mục)
+
+    private func openFile(_ comps: [String]) {
+        let url = store.url(for: comps)
+        if FileManager.default.fileExists(atPath: url.path) {
+            // Danh sách file cùng thư mục (đã tải về) → vuốt trái/phải chuyển file.
+            let dirKey = comps.dropLast().joined(separator: "/")
+            let files = IndexStore.shared.allNodes().filter { pair in
+                guard !pair.node.isDirectory else { return false }
+                let parent = pair.path.components.dropLast().joined(separator: "/")
+                return parent == dirKey
+                    && FileManager.default.fileExists(atPath: store.url(for: pair.path.components).path)
+            }
+            previewURLs = files
+                .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+                .map { store.url(for: $0.path.components) }
+            previewURL = url
+        } else {
+            // File chưa tải về (mới khôi phục) — bảo engine kéo về trước.
+            engine.syncNow()
+        }
     }
 
-    // MARK: - Row
+    // MARK: - Chọn nhiều
 
-    @ViewBuilder
-    private func row(_ entry: FileSystemStore.Entry) -> some View {
-        let childPath = path + [entry.name]
-        HStack {
-            Image(systemName: entry.isDirectory ? "folder.fill" : icon(for: entry.name))
-                .foregroundStyle(entry.isDirectory ? Theme.accent : Color.secondary)
-                .frame(width: 28)
-            if entry.isDirectory {
-                Button {
-                    path.append(entry.name)
-                } label: {
-                    HStack {
-                        Text(entry.name)
-                            .foregroundStyle(.primary)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    }
-                }
+    private func toggleSelection(_ key: String) {
+        if selectedPaths.contains(key) {
+            selectedPaths.remove(key)
+        } else {
+            selectedPaths.insert(key)
+        }
+    }
+
+    private func toggleSelectAll() {
+        if selectedPaths.count >= listing.count {
+            selectedPaths = []
+        } else {
+            selectedPaths = Set(listing.map(\.key))
+        }
+    }
+
+    private func exitSelection() {
+        selectionMode = false
+        selectedPaths = []
+    }
+
+    private var shareableURLs: [URL] {
+        selectedPaths
+            .map { store.url(for: $0.components) }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
+    private func shareSelected() {
+        let urls = shareableURLs
+        guard !urls.isEmpty else { return }
+        shareURLs = urls
+    }
+
+    private func deleteSelected() {
+        for key in selectedPaths {
+            let comps = key.components
+            let p = key
+            try? store.remove(at: comps)
+            Journal.shared.enqueue(.delete(path: p, snapshot: nil))
+        }
+        exitSelection()
+        engine.triggerSync()
+    }
+
+    private func moveEntries(_ keys: [String], to dest: [String]) {
+        for key in keys {
+            let comps = key.components
+            guard let name = comps.last else { continue }
+            let to = dest + [name]
+            guard comps != to else { continue }
+            try? store.move(from: comps, to: to)
+            moveIndexEntries(from: key, to: to.joined(separator: "/"), isDirectory: isDirectory(key), newName: name)
+            Journal.shared.enqueue(.move(from: key, to: to.joined(separator: "/")))
+        }
+        exitSelection()
+        engine.triggerSync()
+    }
+
+    private func isDirectory(_ key: String) -> Bool {
+        IndexStore.shared.node(at: key)?.isDirectory ?? false
+    }
+
+    private func copyEntries(_ keys: [String], to dest: [String]) {
+        for key in keys {
+            let comps = key.components
+            guard let name = comps.last else { continue }
+            var newName = name
+            var n = 2
+            while store.exists(at: dest + [newName])
+                || IndexStore.shared.node(at: (dest + [newName]).joined(separator: "/")) != nil {
+                newName = uniquedCopyName(for: name, n)
+                n += 1
+                if n > 999 { break }
+            }
+            let target = dest + [newName]
+            if isDirectory(key) {
+                try? store.copyDirectory(from: store.url(for: comps), to: target)
+                registerImportedFolder(target)
             } else {
-                Button {
-                    let url = store.url(for: childPath)
-                    if FileManager.default.fileExists(atPath: url.path) {
-                        // Danh sách file cùng thư mục (đã tải về) → vuốt trái/phải
-                        // chuyển file trong QuickLook như app Files.
-                        previewURLs = entries
-                            .filter { !$0.isDirectory && FileManager.default.fileExists(atPath: store.url(for: path + [$0.name]).path) }
-                            .map { store.url(for: path + [$0.name]) }
-                        previewURL = url
-                    } else {
-                        // File chưa tải về (mới khôi phục) — bảo engine kéo về trước.
-                        engine.syncNow()
-                    }
-                } label: {
-                    HStack {
-                        Text(entry.name)
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                        Spacer()
-                        Text(ByteFmt.string(entry.size))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                try? store.copyFile(from: store.url(for: comps), to: target)
+                registerImportedFile(target)
             }
         }
-        .contextMenu { menuItems(entry, childPath) }
+        exitSelection()
+        engine.triggerSync()
     }
 
-    @ViewBuilder
-    private func menuItems(_ entry: FileSystemStore.Entry, _ childPath: [String]) -> some View {
-        if !entry.isDirectory {
-            Button {
-                shareURL = store.url(for: childPath)
-            } label: {
-                Label("Chia sẻ", systemImage: "square.and.arrow.up")
-            }
-        }
-        Button {
-            renameTarget = entry
-        } label: {
-            Label("Đổi tên", systemImage: "pencil")
-        }
-        Button {
-            moveTarget = entry
-        } label: {
-            Label("Di chuyển", systemImage: "arrowshape.turn.up.right")
-        }
-        Divider()
-        Button(role: .destructive) {
-            deleteEntry(entry, childPath)
-        } label: {
-            Label("Xóa", systemImage: "trash")
-        }
-    }
-
-    private func icon(for name: String) -> String {
-        switch (name as NSString).pathExtension.lowercased() {
-        case "jpg", "jpeg", "png", "gif", "heic", "webp": return "photo"
-        case "mp4", "mov", "mkv", "avi", "webm": return "video"
-        case "mp3", "m4a", "wav", "flac": return "music.note"
-        case "pdf": return "doc.richtext"
-        case "txt", "md": return "doc.plaintext"
-        case "zip", "rar", "7z", "tar", "gz": return "doc.zipper"
-        default: return "doc"
-        }
+    private func uniquedCopyName(for name: String, _ n: Int) -> String {
+        let base = (name as NSString).deletingPathExtension
+        let ext = (name as NSString).pathExtension
+        return ext.isEmpty ? "\(base) (\(n))" : "\(base) (\(n)).\(ext)"
     }
 
     // MARK: - Actions (local-first + journal)
@@ -302,16 +672,6 @@ struct FilesView: View {
         engine.triggerSync()
     }
 
-    private func moveEntry(_ entry: FileSystemStore.Entry, to dest: [String]) {
-        let from = path + [entry.name]
-        let to = dest + [entry.name]
-        guard from != to else { return }
-        try? store.move(from: from, to: to)
-        moveIndexEntries(from: from.joined(separator: "/"), to: to.joined(separator: "/"), isDirectory: entry.isDirectory, newName: entry.name)
-        Journal.shared.enqueue(.move(from: from.joined(separator: "/"), to: to.joined(separator: "/")))
-        engine.triggerSync()
-    }
-
     private func deleteEntry(_ entry: FileSystemStore.Entry, _ childPath: [String]) {
         // FileSystemStore.remove chuyển dữ liệu + đăng ký entry "Đã xóa gần đây"
         // (kèm snapshot index). Engine đọc snapshot từ TrashStore khi xử lý op;
@@ -319,6 +679,28 @@ struct FilesView: View {
         let p = childPath.joined(separator: "/")
         try? store.remove(at: childPath)
         Journal.shared.enqueue(.delete(path: p, snapshot: nil))
+        engine.triggerSync()
+    }
+
+    /// Nhân đôi: copy trong cùng thư mục với tên "tên (2).ext" + đăng ký sync.
+    private func duplicateEntry(_ entry: FileSystemStore.Entry, _ childPath: [String]) {
+        guard let name = childPath.last else { return }
+        var newName = name
+        var n = 2
+        while store.exists(at: path + [newName])
+            || IndexStore.shared.node(at: (path + [newName]).joined(separator: "/")) != nil {
+            newName = uniquedCopyName(for: name, n)
+            n += 1
+            if n > 999 { break }
+        }
+        let target = path + [newName]
+        if entry.isDirectory {
+            try? store.copyDirectory(from: store.url(for: childPath), to: target)
+            registerImportedFolder(target)
+        } else {
+            try? store.copyFile(from: store.url(for: childPath), to: target)
+            registerImportedFile(target)
+        }
         engine.triggerSync()
     }
 
@@ -468,6 +850,63 @@ struct FilesView: View {
             modified: Date(), parts: nil, rev: 1, driveFolderId: nil
         ))
         Journal.shared.enqueue(.uploadFile(path: p))
+    }
+}
+
+// MARK: - Thông tin (như "Get Info" của Files)
+
+/// Sheet thông tin 1 file/thư mục: loại, kích thước, ngày sửa, parts + account,
+/// vị trí. Đọc từ index (đúng trạng thái sync).
+struct InfoView: View {
+    let path: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if let node = IndexStore.shared.node(at: path) {
+                    LabeledContent("Tên", value: node.name)
+                    LabeledContent("Loại", value: node.isDirectory ? "Thư mục" : "Tệp")
+                    if !node.isDirectory {
+                        LabeledContent("Kích thước", value: ByteFmt.string(node.size))
+                    }
+                    LabeledContent("Ngày sửa", value: Self.dateText(node.modified ?? Date()))
+                    LabeledContent("Vị trí", value: path)
+                    if let parts = node.parts, !parts.isEmpty {
+                        Section("Phần trên Drive") {
+                            ForEach(parts.sorted { $0.index < $1.index }, id: \.index) { part in
+                                LabeledContent("Phần \(part.index)") {
+                                    VStack(alignment: .trailing, spacing: 2) {
+                                        Text(part.accountEmail.isEmpty ? "—" : part.accountEmail)
+                                            .font(.caption)
+                                        Text(part.driveFileId == nil ? "chưa tải lên" : "đã tải lên")
+                                            .font(.caption)
+                                            .foregroundStyle(part.driveFileId == nil ? Color.orange : Color.green)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Text("Mục này chưa được đồng bộ (chưa có trong chỉ mục).")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("Thông tin")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Xong") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private static func dateText(_ date: Date) -> String {
+        let df = DateFormatter()
+        df.dateStyle = .medium
+        df.timeStyle = .short
+        return df.string(from: date)
     }
 }
 
