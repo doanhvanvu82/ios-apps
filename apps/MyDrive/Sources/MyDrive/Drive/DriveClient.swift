@@ -130,38 +130,28 @@ final class DriveClient {
         return list.files.first
     }
 
-    /// Kiểm tra loạt id còn sống (không trong thùng rác) — trả về set id tồn tại.
-    /// files.list với q = (id = '…' or …) — ~80 id/lượt (giới hạn độ dài URL GET).
-    /// File bị xóa/thùng rác không trả về → mất khỏi set = đã chết.
-    func listAlive(ids: [String]) async throws -> Set<String> {
-        var alive: Set<String> = []
-        var chunk: [String] = []
-        func flush() async throws {
-            guard !chunk.isEmpty else { return }
-            let cond = chunk.map { "id = '\($0)'" }.joined(separator: " or ")
+    /// Liệt kê MỌI file không-thùng-rác của account (1 lượt phân trang).
+    /// Dùng cho đối chiếu part: Drive KHÔNG cho query theo id (q = "id = …"
+    /// → 400 Invalid Value), nên phải liệt kê rồi tự suy cây từ parents.
+    func listAllNonTrashed() async throws -> [DriveFile] {
+        var out: [DriveFile] = []
+        var pageToken: String? = nil
+        let fields = "nextPageToken, files(id,parents)"
+        repeat {
             var query = [
-                URLQueryItem(name: "q", value: "(\(cond)) and trashed = false"),
-                URLQueryItem(name: "fields", value: "nextPageToken, files(id)"),
+                URLQueryItem(name: "q", value: "trashed = false"),
+                URLQueryItem(name: "fields", value: fields),
                 URLQueryItem(name: "pageSize", value: "1000"),
             ]
-            var pageToken: String? = nil
-            repeat {
-                if let pageToken {
-                    query.append(URLQueryItem(name: "pageToken", value: pageToken))
-                }
-                let data = try await request("GET", "/files", query: query)
-                let list = try decode(DriveFileList.self, data)
-                alive.formUnion(list.files.map(\.id))
-                pageToken = list.nextPageToken
-            } while pageToken != nil
-            chunk.removeAll()
-        }
-        for id in ids {
-            chunk.append(id)
-            if chunk.count >= 80 { try await flush() }
-        }
-        try await flush()
-        return alive
+            if let pageToken {
+                query.append(URLQueryItem(name: "pageToken", value: pageToken))
+            }
+            let data = try await request("GET", "/files", query: query)
+            let list = try decode(DriveFileList.self, data)
+            out.append(contentsOf: list.files)
+            pageToken = list.nextPageToken
+        } while pageToken != nil
+        return out
     }
 
     func get(id: String) async throws -> DriveFile {

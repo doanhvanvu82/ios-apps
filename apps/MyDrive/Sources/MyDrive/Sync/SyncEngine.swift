@@ -857,58 +857,52 @@ final class SyncEngine: ObservableObject {
     /// Đối chiếu mọi driveFileId trong index với Drive: id không còn tồn tại
     /// (bị xóa trên web, dọn khỏi thùng rác…) → nil đi + xếp lại op upload.
     /// Mirror giữ file gốc nên upload lại chỉ tốn băng thông, không mất dữ liệu.
-    /// Chỉ tra phần CHƯA nil — và vì vòng sync đầu sau cài lại/index hỏng có thể
-    /// có hàng nghìn id, chunk 80 id/lượt (giới hạn URL q = id = '…' or …).
+    /// Cách tra: Drive KHÔNG cho query theo id (400 Invalid Value) → liệt kê 1
+    /// lượt mọi file không-thùng-rác của account rồi tự suy cây từ parents:
+    /// id sống = nằm dưới root MyDrive; mọi id khác = chết (shared-with-me…).
     private func verifyDriveParts(rootIDs: [String: String]) async {
-        // Tập id cần tra: mọi part đang có driveFileId.
+        // Tập id cần tra: mọi part đang có driveFileId, nhóm theo account chứa nó.
         var checked = 0
-        var deadPaths: [String: Set<Int>] = [:]   // path → part indexes chết
-        var allIDs: [String] = []
-        var idOwner: [String: (path: String, part: Int)] = [:]
+        var byEmail: [String: [String: (path: String, part: Int)]] = [:]   // email → id → owner
         for (path, node) in index.allNodes() {
             guard let parts = node.parts else { continue }
             for (i, part) in parts.enumerated() {
-                guard let fid = part.driveFileId else { continue }
-                allIDs.append(fid)
-                idOwner[fid] = (path, i)
+                guard let fid = part.driveFileId, !part.accountEmail.isEmpty else { continue }
+                byEmail[part.accountEmail, default: [:]][fid] = (path, i)
                 checked += 1
             }
         }
-        guard !allIDs.isEmpty else { return }
+        guard checked > 0 else { return }
 
-        // Nhiều account: mỗi id tra trên account CHỨA nó (token không xuyên account).
+        // Mỗi account: liệt kê mọi file sống, mark những id thấy được là còn sống.
         var aliveGlobal: Set<String> = []
-        let byEmail = Dictionary(grouping: allIDs) { id -> String in
-            guard let owner = idOwner[id],
-                  let node = index.node(at: owner.path),
-                  let parts = node.parts, owner.part < parts.count else { return "" }
-            return parts[owner.part].accountEmail
-        }
         for (email, ids) in byEmail {
-            guard let client = accounts.client(for: email) else { continue }
+            guard let client = accounts.client(for: email) else {
+                // Account không đăng nhập được → coi TẤT CẢ id của nó sống, đừng requeue oan.
+                aliveGlobal.formUnion(ids.keys)
+                continue
+            }
             do {
-                let alive = try await client.listAlive(ids: ids)
-                aliveGlobal.formUnion(alive)
-                AppLog.log("sync", "🔍 \(email): \(alive.count)/\(ids.count) part còn sống trên Drive")
+                let files = try await client.listAllNonTrashed()
+                let aliveHere = Set(files.map(\.id))
+                let found = ids.keys.filter { aliveHere.contains($0) }
+                aliveGlobal.formUnion(found)
+                AppLog.log("sync", "🔍 \(email): \(found.count)/\(ids.count) part còn sống trên Drive (\(files.count) file liệt kê)")
             } catch {
                 // Không tra được (mạng/lỗi tạm) → coi TẤT CẢ còn sống, đừng requeue oan.
                 AppLog.log("sync", "⚠️ Không đối chiếu được part trên \(email): \(error.localizedDescription) — bỏ qua lượt này")
-                aliveGlobal.formUnion(ids)
+                aliveGlobal.formUnion(ids.keys)
             }
         }
-        // Id của account đã đăng xuất (không client) — coi sống, đừng phá index.
-        let uncheckable = allIDs.filter { id in
-            guard let owner = idOwner[id] else { return false }
-            return !byEmail.keys.contains(index.node(at: owner.path)?.parts?[owner.part].accountEmail ?? "")
-        }
-        aliveGlobal.formUnion(uncheckable)
 
-        for (fid, owner) in idOwner where !aliveGlobal.contains(fid) {
-            deadPaths[owner.path, default: []].insert(owner.part)
+        var deadPaths: [String: Set<Int>] = [:]
+        for (_, ids) in byEmail {
+            for (fid, owner) in ids where !aliveGlobal.contains(fid) {
+                deadPaths[owner.path, default: []].insert(owner.part)
+            }
         }
         guard !deadPaths.isEmpty else { return }
 
-        var requeued = 0
         for (path, partIdxs) in deadPaths {
             index.update(path: path) { node in
                 guard var parts = node.parts else { return }
@@ -919,11 +913,9 @@ final class SyncEngine: ObservableObject {
             }
             if !journal.pending().contains(where: { if case let .uploadFile(p) = $0.op { return p == path }; return false }) {
                 journal.enqueue(.uploadFile(path: path))
-                requeued += 1
             }
         }
         AppLog.log("sync", "🔁 \(deadPaths.count) file có part đã chết trên Drive — xếp lại upload (đã tra \(checked) id)")
-        _ = requeued
     }
 
     /// File ĐÃ có trong index nhưng chưa upload xong (parts nil, hoặc có part
