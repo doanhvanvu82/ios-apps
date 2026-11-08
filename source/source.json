@@ -114,6 +114,34 @@
         "entitlements": [],
         "privacy": {}
       }
+    },
+    {
+      "name": "YouTube",
+      "bundleIdentifier": "com.google.ios.youtube",
+      "developerName": "vudv",
+      "subtitle": "Bản build từ máy tính",
+      "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
+      "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/YouTube.png",
+      "tintColor": "#738CFF",
+      "version": "21.44.4",
+      "versionDate": "2026-11-08",
+      "versionDescription": "Build 21.44.4",
+      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/YouTube-21.44.4.ipa",
+      "size": 135362129,
+      "versions": [
+        {
+          "version": "21.44.4",
+          "buildVersion": "21.44.4",
+          "date": "2026-11-08T16:40:28+00:00",
+          "localizedDescription": "Build 21.44.4",
+          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/YouTube-21.44.4.ipa",
+          "size": 135362129
+        }
+      ],
+      "appPermissions": {
+        "entitlements": [],
+        "privacy": {}
+      }
     }
   ],
   "news": []
