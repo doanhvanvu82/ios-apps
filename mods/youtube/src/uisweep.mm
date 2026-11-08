@@ -121,6 +121,40 @@ static id h_avdInit(id s, SEL c, id element, id context) {
     return node;
 }
 
+// Node quảng cáo vào trạng thái hiển thị — chặn NGAY LÚC ĐÓ (mỗi lần cell
+// lướt vào viewport). didEnterVisibleState: v16@0:8.
+static IMP _o_avdEnter;
+static void h_avdEnter(id s, SEL c) {
+    // Ẩn node + thu view chứa nó về 0 trước khiorig chạy.
+    @try {
+        SEL setH = sel_registerName("setHidden:");
+        if ([s respondsToSelector:setH]) {
+            ((void (*)(id, SEL, BOOL))objc_msgSend)(s, setH, YES);
+        }
+        UIView *view = nil;
+        SEL vSel = sel_registerName("view");
+        if ([s respondsToSelector:vSel]) {
+            view = ((id (*)(id, SEL))objc_msgSend)(s, vSel);
+        }
+        if (view) {
+            UIView *cell = view;
+            while (cell && ![cell isKindOfClass:[UICollectionViewCell class]]) {
+                cell = cell.superview;
+            }
+            if (cell && !cell.hidden) {
+                cell.hidden = YES;
+                CGRect f = cell.frame;
+                cell.frame = CGRectMake(f.origin.x, f.origin.y, 0, 0);
+                if (!g_hiddenCells) g_hiddenCells = [NSMutableArray new];
+                [g_hiddenCells addObject:[YTMWeakWrapper wrapperWithObject:cell]];
+                g_sweepHitTotal++;
+                YTModLog(@"nodehide: cell quảng cáo bị ẨN ngay khi vào viewport (tổng %d)",
+                         g_sweepHitTotal);
+            }
+        }
+    } @catch (__unused NSException *e) {}
+}
+
 static void ytm_sweep_once(void) {
     if (!YTAdsOffEnabled()) return;
     @try {
@@ -148,12 +182,19 @@ void YTUISweepInstall(void) {
                                 method_getTypeEncoding(avdM));
             YTModLog(@"uisweep: hook init ActiveView node OK");
         }
+        Method avdE = avdCls ? class_getInstanceMethod(avdCls, sel_registerName("didEnterVisibleState")) : NULL;
+        if (avdE) {
+            _o_avdEnter = method_getImplementation(avdE);
+            class_replaceMethod(avdCls, sel_registerName("didEnterVisibleState"), (IMP)h_avdEnter,
+                                method_getTypeEncoding(avdE));
+            YTModLog(@"uisweep: hook didEnterVisibleState OK");
+        }
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
             ytm_sweep_once();
         });
         dispatch_async(dispatch_get_main_queue(), ^{
-            g_sweepTimer = [NSTimer timerWithTimeInterval:0.5
+            g_sweepTimer = [NSTimer timerWithTimeInterval:0.15
                                                   repeats:YES
                                                     block:^(NSTimer *t) {
                                                         ytm_sweep_once();
