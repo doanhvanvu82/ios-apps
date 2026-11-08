@@ -61,9 +61,11 @@ InnerTube từ chối phục vụ app không rõ nguồn gốc.
 `SUFFIX=mod` đổi thành `vn.vudv.youtube.mod` để cài **song song** YouTube gốc —
 đổi lại **không đăng nhập được Google**. `.deb` chỉ dùng cho máy jailbreak.
 
-Mỗi lần build tăng `CFBundleVersion` (YouTube ghi version dạng `21.44.4` nên
-lần đầu dùng epoch giây, các lần sau +1) — Ksign dựa vào đó để nhận cập nhật;
-tên IPA trong source cũng có build (`YouTubeMod-21.44.4-<build>.ipa`).
+Build **không đổi** `CFBundleVersion`/`CFBundleShortVersionString`: YouTube gửi
+chúng làm `clientVersion` tới InnerTube, server chỉ chấp nhận version thật của
+bản app. Version lạ (vd epoch) → mọi API trả 404 → trang chủ/video chỉ có
+skeleton (đã kiểm chứng: `clientVersion=21.44.4` → HTTP 200, epoch → 404).
+Muốn cài bản mới thì gỡ app trong Ksign trước rồi cài lại.
 
 Toolchain: `~/swift-dev` (clang), Swift SDK Darwin (`~/.swiftpm/swift-sdks`),
 `ld64.lld` của xtool toolset, `ldid` tải vào `work/tools`. Override bằng

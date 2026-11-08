@@ -187,20 +187,18 @@ patch_app() {
   # Ghi vào padding header (không dựng lại LINKEDIT như LIEF) — xem tools/inject_dylib.py.
   python3 "$HERE/tools/inject_dylib.py" "$bin" "@executable_path/Frameworks/$DYLIB_NAME"
 
-  # Tăng CFBundleVersion mỗi lần build (Ksign dựa vào đó để nhận cập nhật).
+  # KHÔNG đổi CFBundleVersion/CFBundleShortVersionString: YouTube gửi chúng
+  # làm clientVersion tới InnerTube, mà server chỉ chấp nhận version thật của
+  # bản app (21.44.4). Version lạ → mọi API 404 → trang chủ/video skeleton.
+  # Muốn cài đè bản mới thì gỡ app trong Ksign trước (không dựa episode).
   # Chỉ ghi đè bundle id khi SUFFIX khác rỗng — giữ id gốc thì Info.plist và
   # appex giữ nguyên id (điều kiện để Google cho đăng nhập và trả dữ liệu).
   "$PY" - "$app" "$bid" "$disp" "$SUFFIX" <<'PY'
-import plistlib, sys, time, glob, os
+import plistlib, sys, glob, os
 app, bid, disp, suffix = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 p = os.path.join(app, "Info.plist")
 d = plistlib.load(open(p, 'rb'))
 old_id = d.get("CFBundleIdentifier", "")
-# YouTube ghi version dạng "21.44.4" (không phải số) → dùng epoch giây, vẫn
-# là số nguyên tăng dần giữa các lần build.
-old = str(d.get("CFBundleVersion") or "")
-new = str(int(old) + 1) if old.isdigit() else str(int(time.time()))
-d["CFBundleVersion"] = new
 # Lấy log qua app Files khi cắm USB (toolkit/pull_app_logs.sh).
 d["UIFileSharingEnabled"] = True
 d["LSSupportsOpeningDocumentsInPlace"] = True
@@ -208,7 +206,9 @@ if suffix:
     d["CFBundleIdentifier"] = bid
     d["CFBundleDisplayName"] = disp
 plistlib.dump(d, open(p, 'wb'), fmt=plistlib.FMT_BINARY)
-print("→ Info.plist: id=%s name=%s build=%s" % (d["CFBundleIdentifier"], d.get("CFBundleDisplayName"), new))
+print("→ Info.plist: id=%s name=%s version=%s build=%s" % (
+    d["CFBundleIdentifier"], d.get("CFBundleDisplayName"),
+    d.get("CFBundleShortVersionString"), d.get("CFBundleVersion")))
 
 # App extension BẮT BUỘC có bundle id bắt đầu bằng bundle id app chính, nếu
 # không installd từ chối cài: com.google.ios.youtube.ShareExtension → <bid>.ShareExtension.
@@ -222,18 +222,8 @@ if suffix:
             tail = eid.rsplit(".", 1)[-1]
         eid_new = "%s.%s" % (bid, tail)
         e["CFBundleIdentifier"] = eid_new
-        # Version của appex phải khớp app chính.
-        e["CFBundleShortVersionString"] = d.get("CFBundleShortVersionString", e.get("CFBundleShortVersionString"))
-        e["CFBundleVersion"] = new
         plistlib.dump(e, open(ep, 'wb'), fmt=plistlib.FMT_BINARY)
         print("   appex: %s → %s" % (eid, eid_new))
-else:
-    # Giữ id: chỉ đồng bộ version appex với app chính.
-    for ep in sorted(glob.glob(os.path.join(app, "PlugIns", "*.appex", "Info.plist"))):
-        e = plistlib.load(open(ep, 'rb'))
-        e["CFBundleShortVersionString"] = d.get("CFBundleShortVersionString", e.get("CFBundleShortVersionString"))
-        e["CFBundleVersion"] = new
-        plistlib.dump(e, open(ep, 'wb'), fmt=plistlib.FMT_BINARY)
 PY
 
   # Bỏ MỌI chữ ký cũ (app chính, từng appex, framework). CodeResources cũ chứa

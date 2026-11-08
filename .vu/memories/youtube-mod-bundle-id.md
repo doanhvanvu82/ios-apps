@@ -1,11 +1,11 @@
 ---
-description: "Mod YouTube phải giữ bundle id gốc mới đăng nhập/tải video được"
+description: "Mod YouTube: bundle id gốc + không đổi CFBundleVersion (clientVersion)"
 evidence:
   - path: "mods/youtube/build.sh"
-    quote: "Giữ bundle id gốc là bắt buộc để đăng nhập Google: YouTube gửi bundle id lên"
+    quote: "KHÔNG đổi CFBundleVersion/CFBundleShortVersionString: YouTube gửi chúng"
   - path: "mods/youtube/build.sh"
     quote: "if [ -z \"${SUFFIX+x}\" ]; then SUFFIX=\"\"; fi"
   - path: "mods/youtube/README.md"
-    quote: "Bundle id mặc định **giữ nguyên** `com.google.ios.youtube` (cài đè YouTube gốc)."
+    quote: "server chỉ chấp nhận version thật của\nbản app. Version lạ (vd epoch) → mọi API trả 404"
 ---
-Mod YouTube phải giữ bundle id gốc `com.google.ios.youtube` (mặc định của `mods/youtube/build.sh`). Đổi sang `vn.vudv.youtube.mod` thì Google chặn đăng nhập ("không thể xác nhận ứng dụng là an toàn") và InnerTube không trả trang chủ/video — màn hình skeleton, tắt chặn quảng cáo không cứu được. Log syslog có `I-COR000008` bundle id lệch `GoogleService-Info.plist`. Chỉ dùng `SUFFIX=mod` khi chấp nhận không đăng nhập được.
+Mod YouTube phải giữ bundle id gốc `com.google.ios.youtube` để đăng nhập Google (id lạ bị chặn "không thể xác nhận ứng dụng là an toàn"). Lỗi không tải được trang chủ/video (skeleton, API trả 404) KHÔNG do bundle id mà do `CFBundleVersion` bị bump thành epoch: app gửi nó làm InnerTube `clientVersion`; chỉ version thật `21.44.4` được chấp nhận (HTTP 200), epoch/lạ → 404. `build.sh` giờ không đụng version.
