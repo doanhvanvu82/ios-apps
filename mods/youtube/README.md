@@ -52,7 +52,7 @@ mods/youtube/
 │   ├── hooks.h           bảng hook + API cài đặt
 │   ├── adblock.mm        chặn ads player/InnerTube
 │   ├── promo.mm          chặn ads feed + promo/upsell Premium
-│   ├── sectionfilter.mm  lọc entry quảng cáo/promo khỏi section renderers
+│   ├── sectionfilter.mm  lọc entry quảng cáo + nén cell ad qua sizeForCellController
 │   ├── autopip.mm        tự bật PiP khi rời foreground
 │   ├── hook_impls.mm     thân hook + YTM_HOOKS (class/selector/type encoding)
 │   ├── hooks.mm          swizzling bằng ObjC runtime, đọc cấu hình
