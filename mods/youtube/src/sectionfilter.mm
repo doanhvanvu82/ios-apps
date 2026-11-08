@@ -227,6 +227,51 @@ static id h_elData(id s, SEL c) {
     return v;
 }
 
+// --- TẦNG CHẮC CHẮN NHẤT: không tạo cell controller cho entry quảng cáo ----
+// Log 2.6: eldata XÓA chạy ĐÚNG (3/3 element ad bị làm rỗng) nhưng app VẪN
+// dựng cell (probe vẫn thấy ELEM-AD, mạng vẫn GET pagead/adview + simgad) —
+// elementData chỉ là mô tả; cell factory đã giữ renderer khác. Chặn ở nguồn:
+// createCellControllerForEntry: (YTBaseFeedController/YTFeedSectionController/
+// YTSectionController) trả nil cho entry quảng cáo → không có controller →
+// không cell, không kích thước, không request. Trả nil tại đây an toàn:
+// caller kiểm nil (element bị xoá giữa chừng là chuyện YouTube vẫn xử lý khi
+// refresh feed).
+static IMP _o_cccBase, _o_cccFeed, _o_cccSec;
+static BOOL ytm_entry_desc_is_ad(id entry) {
+    if (!entry) return NO;
+    @try {
+        NSString *desc = [entry respondsToSelector:@selector(description)]
+                             ? [entry description] : @"";
+        return ytm_desc_is_ad(desc ?: @"");
+    } @catch (__unused NSException *e) {
+        return NO;
+    }
+}
+static id h_cccBase(id s, SEL c, id entry) {
+    if (YTAdsOffEnabled() && ytm_entry_desc_is_ad(entry)) {
+        static int logged = 0;
+        if (logged < 20) { logged++; YTModLog(@"cell: TỪ CHỐI entry quảng cáo (base)"); }
+        return nil;
+    }
+    return ((id (*)(id, SEL, id))_o_cccBase)(s, c, entry);
+}
+static id h_cccFeed(id s, SEL c, id entry) {
+    if (YTAdsOffEnabled() && ytm_entry_desc_is_ad(entry)) {
+        static int logged = 0;
+        if (logged < 20) { logged++; YTModLog(@"cell: TỪ CHỐI entry quảng cáo (feed)"); }
+        return nil;
+    }
+    return ((id (*)(id, SEL, id))_o_cccFeed)(s, c, entry);
+}
+static id h_cccSec(id s, SEL c, id entry) {
+    if (YTAdsOffEnabled() && ytm_entry_desc_is_ad(entry)) {
+        static int logged = 0;
+        if (logged < 20) { logged++; YTModLog(@"cell: TỪ CHỐI entry quảng cáo (section)"); }
+        return nil;
+    }
+    return ((id (*)(id, SEL, id))_o_cccSec)(s, c, entry);
+}
+
 // --- TẦNG CUỐI: nén cell quảng cáo ở section controller ---------------------
 // Log 2.1: ad trang chủ là element thường có `ad_logging_data` → không có class
 // "Promoted*" riêng để chặn tên. Mọi entry của section đều đi qua
@@ -307,9 +352,9 @@ static BOOL ytm_install_one(const char *clsName, const char *selName, IMP hook, 
 void YTSectionFilterInstall(void) {
     // Chỉ cài mỗi hook 1 lần: cài đè lên chính mình sẽ khiến *orig trỏ vào hook
     // của mình → đệ quy vô hạn.
-    static BOOL done[7];
+    static BOOL done[10];
     int n = 0;
-    struct { const char *cls; const char *sel; IMP hook; IMP *orig; const char *label; } all[7] = {
+    struct { const char *cls; const char *sel; IMP hook; IMP *orig; const char *label; } all[10] = {
         {"YTISectionListRenderer", "sectionRenderers", (IMP)h_sectionRenderers, &_o_sectionRenderers, "feed"},
         {"YTIWatchNextResponse", "sectionRenderers", (IMP)h_wnSectionRenderers, &_o_wnSectionRenderers, "watch"},
         {"ELMPBFeedData", "contents", (IMP)h_feedContents, &_o_feedContents, "elm"},
@@ -317,8 +362,11 @@ void YTSectionFilterInstall(void) {
         {"YTIElementRenderer", "elementData", (IMP)h_elData, &_o_elData, "eldata"},
         {"YTSectionController", "sizeForCellController:withSize:", (IMP)h_sizeForCell, &_o_sizeForCell, "size"},
         {"YTFeedSectionController", "sizeForCellController:withSize:", (IMP)h_sizeForFeed, &_o_sizeForFeed, "feedsize"},
+        {"YTBaseFeedController", "createCellControllerForEntry:", (IMP)h_cccBase, &_o_cccBase, "cell-base"},
+        {"YTFeedSectionController", "createCellControllerForEntry:", (IMP)h_cccFeed, &_o_cccFeed, "cell-feed"},
+        {"YTSectionController", "createCellControllerForEntry:", (IMP)h_cccSec, &_o_cccSec, "cell-sec"},
     };
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 10; i++) {
         if (done[i]) { n++; continue; }
         if (ytm_install_one(all[i].cls, all[i].sel, all[i].hook, all[i].orig, all[i].label)) {
             done[i] = YES;
