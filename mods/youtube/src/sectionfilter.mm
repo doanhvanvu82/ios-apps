@@ -227,15 +227,10 @@ static id h_elData(id s, SEL c) {
     return v;
 }
 
-// --- TẦNG CHẮC CHẮN NHẤT: không tạo cell controller cho entry quảng cáo ----
-// Log 2.6: eldata XÓA chạy ĐÚNG (3/3 element ad bị làm rỗng) nhưng app VẪN
-// dựng cell (probe vẫn thấy ELEM-AD, mạng vẫn GET pagead/adview + simgad) —
-// elementData chỉ là mô tả; cell factory đã giữ renderer khác. Chặn ở nguồn:
-// createCellControllerForEntry: (YTBaseFeedController/YTFeedSectionController/
-// YTSectionController) trả nil cho entry quảng cáo → không có controller →
-// không cell, không kích thước, không request. Trả nil tại đây an toàn:
-// caller kiểm nil (element bị xoá giữa chừng là chuyện YouTube vẫn xử lý khi
-// refresh feed).
+// --- Tầng cell controller (createCellControllerForEntry:) -------------------
+// 2.7 BỎ: entry của hàm này là SECTION/entry lớn chứa element con — mô tả của
+// nó có thể chứa ad_logging_data của element con → trả nil làm TRỐNG CẢ FEED
+// (bản 2.7 gây skeleton mãi). Chỉ giữ ở tầng elementData (eldata) + size.
 static IMP _o_cccBase, _o_cccFeed, _o_cccSec;
 static BOOL ytm_entry_desc_is_ad(id entry) {
     if (!entry) return NO;
@@ -248,27 +243,12 @@ static BOOL ytm_entry_desc_is_ad(id entry) {
     }
 }
 static id h_cccBase(id s, SEL c, id entry) {
-    if (YTAdsOffEnabled() && ytm_entry_desc_is_ad(entry)) {
-        static int logged = 0;
-        if (logged < 20) { logged++; YTModLog(@"cell: TỪ CHỐI entry quảng cáo (base)"); }
-        return nil;
-    }
     return ((id (*)(id, SEL, id))_o_cccBase)(s, c, entry);
 }
 static id h_cccFeed(id s, SEL c, id entry) {
-    if (YTAdsOffEnabled() && ytm_entry_desc_is_ad(entry)) {
-        static int logged = 0;
-        if (logged < 20) { logged++; YTModLog(@"cell: TỪ CHỐI entry quảng cáo (feed)"); }
-        return nil;
-    }
     return ((id (*)(id, SEL, id))_o_cccFeed)(s, c, entry);
 }
 static id h_cccSec(id s, SEL c, id entry) {
-    if (YTAdsOffEnabled() && ytm_entry_desc_is_ad(entry)) {
-        static int logged = 0;
-        if (logged < 20) { logged++; YTModLog(@"cell: TỪ CHỐI entry quảng cáo (section)"); }
-        return nil;
-    }
     return ((id (*)(id, SEL, id))_o_cccSec)(s, c, entry);
 }
 
