@@ -5,9 +5,14 @@
 #   IPA=/đường/dẫn/YouTube.ipa ./build.sh
 #   IPA_URL=https://… ./build.sh   # tải IPA về work/ nếu chưa có (dùng cho CI)
 #   ./build.sh --check             # chỉ kiểm tra có IPA gốc không (exit 3 nếu thiếu)
-#   SUFFIX= ./build.sh             # giữ bundle id gốc (mặc định: mod)
+#   SUFFIX= ./build.sh             # giữ bundle id gốc com.google.ios.youtube (MẶC ĐỊNH)
+#   SUFFIX=mod ./build.sh          # đổi thành vn.vudv.youtube.mod, cài song song YouTube gốc
 #
 # Kết quả: out/YouTube_<tag>_<version>.ipa (+ .deb nếu có ldid/dpkg-deb)
+#
+# Giữ bundle id gốc là bắt buộc để đăng nhập Google: YouTube gửi bundle id lên
+# máy chủ và Google từ chối "không thể xác nhận ứng dụng an toàn" với id lạ.
+# App store / InnerTube cũng từ chối phục vụ trang chủ, video → màn hình skeleton.
 #
 # Dylib dùng method swizzling của ObjC runtime nên KHÔNG vá trang code của app;
 # chỉ thêm LC_LOAD_DYLIB vào binary chính (LIEF), rồi ký ad-hoc toàn bộ bằng ldid.
@@ -23,7 +28,9 @@ OUT="$HERE/out"
 APP_NAME="YouTube"
 DYLIB_NAME="libyoutubemod.dylib"
 MOD_VERSION="${MOD_VERSION:-1.0}"
-if [ -z "${SUFFIX+x}" ]; then SUFFIX="mod"; fi
+# Mặc định giữ bundle id gốc: đổi id thì Google chặn đăng nhập và không trả
+# dữ liệu trang chủ/video (xem đầu file).
+if [ -z "${SUFFIX+x}" ]; then SUFFIX=""; fi
 
 # Nguồn IPA: biến IPA > file mods/youtube/source.env (không commit) > IPA_URL.
 if [ -z "${IPA:-}" ] && [ -f "$HERE/source.env" ]; then
@@ -180,14 +187,15 @@ patch_app() {
   # Ghi vào padding header (không dựng lại LINKEDIT như LIEF) — xem tools/inject_dylib.py.
   python3 "$HERE/tools/inject_dylib.py" "$bin" "@executable_path/Frameworks/$DYLIB_NAME"
 
-  "$PY" - "$app/Info.plist" "$bid" "$disp" <<'PY'
+  # Tăng CFBundleVersion mỗi lần build (Ksign dựa vào đó để nhận cập nhật).
+  # Chỉ ghi đè bundle id khi SUFFIX khác rỗng — giữ id gốc thì Info.plist và
+  # appex giữ nguyên id (điều kiện để Google cho đăng nhập và trả dữ liệu).
+  "$PY" - "$app" "$bid" "$disp" "$SUFFIX" <<'PY'
 import plistlib, sys, time, glob, os
-p, bid, disp = sys.argv[1], sys.argv[2], sys.argv[3]
+app, bid, disp, suffix = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+p = os.path.join(app, "Info.plist")
 d = plistlib.load(open(p, 'rb'))
 old_id = d.get("CFBundleIdentifier", "")
-d["CFBundleIdentifier"] = bid
-d["CFBundleDisplayName"] = disp
-# Mỗi lần build tăng CFBundleVersion (Ksign dựa vào đó để nhận cập nhật).
 # YouTube ghi version dạng "21.44.4" (không phải số) → dùng epoch giây, vẫn
 # là số nguyên tăng dần giữa các lần build.
 old = str(d.get("CFBundleVersion") or "")
@@ -196,26 +204,36 @@ d["CFBundleVersion"] = new
 # Lấy log qua app Files khi cắm USB (toolkit/pull_app_logs.sh).
 d["UIFileSharingEnabled"] = True
 d["LSSupportsOpeningDocumentsInPlace"] = True
+if suffix:
+    d["CFBundleIdentifier"] = bid
+    d["CFBundleDisplayName"] = disp
 plistlib.dump(d, open(p, 'wb'), fmt=plistlib.FMT_BINARY)
-print("→ Info.plist: id=%s name=%s build=%s" % (bid, disp, new))
+print("→ Info.plist: id=%s name=%s build=%s" % (d["CFBundleIdentifier"], d.get("CFBundleDisplayName"), new))
 
 # App extension BẮT BUỘC có bundle id bắt đầu bằng bundle id app chính, nếu
 # không installd từ chối cài: com.google.ios.youtube.ShareExtension → <bid>.ShareExtension.
-appdir = os.path.dirname(os.path.abspath(p))
-for ep in sorted(glob.glob(os.path.join(appdir, "PlugIns", "*.appex", "Info.plist"))):
-    e = plistlib.load(open(ep, 'rb'))
-    eid = e.get("CFBundleIdentifier", "")
-    if eid.startswith(old_id + "."):
-        suffix = eid[len(old_id) + 1:]
-    else:
-        suffix = eid.rsplit(".", 1)[-1]
-    eid_new = "%s.%s" % (bid, suffix)
-    e["CFBundleIdentifier"] = eid_new
-    # Version của appex phải khớp app chính.
-    e["CFBundleShortVersionString"] = d.get("CFBundleShortVersionString", e.get("CFBundleShortVersionString"))
-    e["CFBundleVersion"] = new
-    plistlib.dump(e, open(ep, 'wb'), fmt=plistlib.FMT_BINARY)
-    print("   appex: %s → %s" % (eid, eid_new))
+if suffix:
+    for ep in sorted(glob.glob(os.path.join(app, "PlugIns", "*.appex", "Info.plist"))):
+        e = plistlib.load(open(ep, 'rb'))
+        eid = e.get("CFBundleIdentifier", "")
+        if eid.startswith(old_id + "."):
+            tail = eid[len(old_id) + 1:]
+        else:
+            tail = eid.rsplit(".", 1)[-1]
+        eid_new = "%s.%s" % (bid, tail)
+        e["CFBundleIdentifier"] = eid_new
+        # Version của appex phải khớp app chính.
+        e["CFBundleShortVersionString"] = d.get("CFBundleShortVersionString", e.get("CFBundleShortVersionString"))
+        e["CFBundleVersion"] = new
+        plistlib.dump(e, open(ep, 'wb'), fmt=plistlib.FMT_BINARY)
+        print("   appex: %s → %s" % (eid, eid_new))
+else:
+    # Giữ id: chỉ đồng bộ version appex với app chính.
+    for ep in sorted(glob.glob(os.path.join(app, "PlugIns", "*.appex", "Info.plist"))):
+        e = plistlib.load(open(ep, 'rb'))
+        e["CFBundleShortVersionString"] = d.get("CFBundleShortVersionString", e.get("CFBundleShortVersionString"))
+        e["CFBundleVersion"] = new
+        plistlib.dump(e, open(ep, 'wb'), fmt=plistlib.FMT_BINARY)
 PY
 
   # Bỏ MỌI chữ ký cũ (app chính, từng appex, framework). CodeResources cũ chứa

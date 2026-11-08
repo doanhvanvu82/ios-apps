@@ -44,16 +44,22 @@ export IPA=/đường/dẫn/YouTube.ipa
 export IPA_URL=https://…/YouTube-21.44.4.ipa   # tải về work/ (CI)
 
 # 2) build
-./build.sh                 # → out/YouTube_mod_21.44.4.ipa (+ YouTubeMod_1.0.deb)
-SUFFIX= ./build.sh         # giữ bundle id gốc com.google.ios.youtube
+./build.sh                 # → out/YouTube_orig_21.44.4.ipa (giữ bundle id gốc)
+SUFFIX=mod ./build.sh      # → đổi id vn.vudv.youtube.mod, cài song song YouTube gốc
 ./build.sh --check         # exit 0 nếu có IPA nguồn, 3 nếu thiếu (build_all dùng)
 
 # hoặc build cùng mọi app:
 toolkit/build_all.sh mods  # bỏ qua mục trong build-exclude.txt
 ```
 
-Bundle id mặc định `vn.vudv.youtube.mod` (cài song song với YouTube gốc, đăng
-nhập lại Google). `.deb` chỉ dùng cho máy jailbreak.
+Bundle id mặc định **giữ nguyên** `com.google.ios.youtube` (cài đè YouTube gốc).
+Đây là điều kiện để đăng nhập Google: app gửi bundle id lên máy chủ, id lạ bị
+chặn với "Không thể đăng nhập … Google không thể xác nhận rằng ứng dụng này là
+an toàn". Đổi id cũng làm trang chủ/video không tải được (skeleton mãi) vì
+InnerTube từ chối phục vụ app không rõ nguồn gốc.
+
+`SUFFIX=mod` đổi thành `vn.vudv.youtube.mod` để cài **song song** YouTube gốc —
+đổi lại **không đăng nhập được Google**. `.deb` chỉ dùng cho máy jailbreak.
 
 Mỗi lần build tăng `CFBundleVersion` (YouTube ghi version dạng `21.44.4` nên
 lần đầu dùng epoch giây, các lần sau +1) — Ksign dựa vào đó để nhận cập nhật;
@@ -78,13 +84,13 @@ Toolchain: `~/swift-dev` (clang), Swift SDK Darwin (`~/.swiftpm/swift-sdks`),
   so nhanh `B16@0:8`, `v40@0:8@16@?24@?32`… để phát hiện lệch ABI nếu dùng IPA
   khác bản 21.44.4. Log ghi cảnh báo nếu encoding runtime khác dump.
 
-## Bundle id khi đổi tên app (bắt buộc cho appex)
+## Bundle id
 
-Mặc định mod đổi bundle id thành `vn.vudv.youtube.mod`. Với app **có app extension**, mọi appex phải có
-bundle id bắt đầu bằng bundle id app chính, nếu không `installd` từ chối cài (app cài "thất bại" dù
-Ksign ký xong). `build.sh` tự đổi `com.google.ios.youtube.ShareExtension` → `vn.vudv.youtube.mod.ShareExtension`
-và đồng bộ `CFBundleVersion` cho cả 5 appex. Build cũng xoá **mọi** `_CodeSignature`/`SC_Info` (app chính,
-từng appex, framework widevine) — CodeResources của bản Apple gốc làm iOS báo chữ ký tài nguyên sai.
+Mặc định **giữ nguyên** `com.google.ios.youtube`. `SUFFIX=mod` đổi thành
+`vn.vudv.youtube.mod` (khi đó `build.sh` cũng đổi bundle id của 5 appex theo
+prefix mới — bắt buộc, nếu không `installd` từ chối cài). Build luôn xoá **mọi**
+`_CodeSignature`/`SC_Info` (app chính, appex, framework widevine) — CodeResources
+của bản Apple gốc làm iOS báo chữ ký tài nguyên sai.
 
 ## Danh sách hook
 
