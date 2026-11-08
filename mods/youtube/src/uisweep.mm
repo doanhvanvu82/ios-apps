@@ -65,6 +65,24 @@ static void ytm_hide_ad_cell_from(UIView *root) {
                 YTModLog(@"uisweep-probe: cell class %@ (%.0fx%.0f)",
                          ccn, v.frame.size.width, v.frame.size.height);
             }
+            // _ASCollectionViewCell: node ELM nằm trong content view. Log class
+            // node + class subview trực tiếp để phân biệt cell ad vs video.
+            static NSMutableSet *nodeSeen;
+            static dispatch_once_t onceNode;
+            dispatch_once(&onceNode, ^{ nodeSeen = [NSMutableSet new]; });
+            UIView *cv = nil;
+            if ([v isKindOfClass:[UICollectionViewCell class]]) {
+                cv = ((UICollectionViewCell *)v).contentView;
+            }
+            for (UIView *sub in cv.subviews) {
+                NSString *scn = NSStringFromClass(object_getClass(sub));
+                NSString *key = [ccn stringByAppendingFormat:@"|%@", scn];
+                if (![nodeSeen containsObject:key]) {
+                    [nodeSeen addObject:key];
+                    YTModLog(@"uisweep-probe: %@ › subview %@ (%.0fx%.0f)",
+                             ccn, scn, sub.frame.size.width, sub.frame.size.height);
+                }
+            }
         }
         NSString *clsName = NSStringFromClass(object_getClass(v));
         if ([clsName containsString:@"TextNode"]) {
