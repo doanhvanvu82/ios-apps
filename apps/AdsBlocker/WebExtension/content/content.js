@@ -264,16 +264,21 @@
   // ---------------------------------------------------------------- lớp phủ bắt click
 
   function overlayAt(target) {
+    if (!target) return null;
     for (let el = target, depth = 0; el && el !== document.body && el !== document.documentElement && depth < 6;
       el = el.parentElement, depth++) {
       if (el.hasAttribute(OWN_ATTR)) return null;
       const f = featuresOf(el, el.getBoundingClientRect(), getComputedStyle(el));
-      if (isInvisibleOverlay(f)) return el;
+      if (isInvisibleOverlay(f)) {
+        console.log("[AdsBlocker] overlayAt: found", el.tagName, "zIndex=", f.zIndex, "fixed=", f.fixed, "absolute=", f.absolute, "transparent=", f.transparent);
+        return el;
+      }
     }
     return null;
   }
 
   function removeOverlay(el, how) {
+    console.log("[AdsBlocker] removeOverlay:", how, "el:", el?.tagName, el?.className?.slice(0, 50));
     reportBlocked("overlay", el.querySelector("a[href]")?.href || el.getAttribute("href") || "", how);
     el.remove();
   }
@@ -282,12 +287,14 @@
     if (!features.ads || siteRules.keepOverlays || !document.body) return;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+    let removed = 0;
     for (const fx of [0.25, 0.5, 0.75]) {
       for (const fy of [0.25, 0.5, 0.75]) {
         const el = overlayAt(document.elementFromPoint(vw * fx, vh * fy));
-        if (el) removeOverlay(el, "lớp phủ trong suốt");
+        if (el) { removeOverlay(el, "lớp phủ trong suốt"); removed++; }
       }
     }
+    if (removed) console.log("[AdsBlocker] sweepOverlays: removed", removed, "overlays");
   }
 
   let sweepTimer = 0;
@@ -306,6 +313,8 @@
   // (chỉ bấm được). Cú chạm đã bị stopImmediatePropagation nên script của trang không thấy; chặn click là đủ để
   // không mở link/tab quảng cáo. Listener cũng phải khai báo passive ở các loại còn lại, nếu không trình duyệt vẫn
   // coi cú chạm là "có thể bị chặn" và hoãn việc cuộn tới khi xử lý xong.
+  const DEBUG = false; // Bật true để hiển thị log debug trong Safari Developer Tools
+  const log = (...args) => { if (DEBUG) console.log("[AdsBlocker]", ...args); };
   for (const type of ["pointerdown", "touchstart", "mousedown", "click"]) {
     const cancelClick = type === "click";
     window.addEventListener(type, (event) => {
@@ -313,6 +322,7 @@
       const target = event.composedPath()[0];
       const el = overlayAt(target instanceof Element ? target : target?.parentElement);
       if (!el) return;
+      log(`Guard bắt ${type} trên overlay, cancelClick=${cancelClick}, preventDefault=${cancelClick}`);
       if (cancelClick) event.preventDefault();
       event.stopImmediatePropagation();
       removeOverlay(el, "chạm vào lớp phủ trong suốt");
@@ -664,6 +674,7 @@
 
   // ---------------------------------------------------------------- khởi động
 
+  console.log("[AdsBlocker] Content script loaded, host:", HOST, "isTop:", IS_TOP);
   loadConfig();
   document.addEventListener("DOMContentLoaded", () => {
     applyConfig();
