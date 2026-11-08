@@ -216,8 +216,11 @@ def main():
         print(f"→ Gộp từ {os.path.basename(merge_from)}: giữ {len(merged) - built_count} mục cũ.")
         apps = merged
 
+    # Tên source: GitHub publish dùng "iOS apps"; source LAN giữ nhãn máy nhà
+    # (để phân biệt 2 source trên Ksign).
+    source_name = os.environ.get("SOURCE_NAME", "iOS apps (máy nhà)")
     source = {
-        "name": "iOS apps (máy nhà)",
+        "name": source_name,
         "identifier": SOURCE_ID,
         "sourceURL": source_url,
         "apps": apps,

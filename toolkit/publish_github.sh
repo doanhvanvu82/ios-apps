@@ -62,7 +62,7 @@ PY
         MERGE_ARGS=(--merge-from "$OUT_DIR/source.prev.json")
     fi
 fi
-SOURCE_OUT="$OUT_DIR" python3 toolkit/sidestore_source.py "$BASE" --source-url "$SOURCE_URL" \
+SOURCE_NAME="iOS apps" SOURCE_OUT="$OUT_DIR" python3 toolkit/sidestore_source.py "$BASE" --source-url "$SOURCE_URL" \
     "${DIST_ARGS[@]+"${DIST_ARGS[@]}"}" "${MERGE_ARGS[@]+"${MERGE_ARGS[@]}"}"
 
 # Không bao giờ push source.json rỗng (vd artifact CI giải nén sai thư mục):
