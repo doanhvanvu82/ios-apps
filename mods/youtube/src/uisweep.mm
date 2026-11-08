@@ -96,6 +96,31 @@ static void ytm_hide_ad_cell_from(UIView *root) {
     }
 }
 
+// TẦNG TRƯỚC HIỆN RA: cell ad được nhận diện ngay khi ELMCellNode dựng node con
+// — không chờ sweep. Hook YTActiveViewDisplayContainerNode.initWithElement:
+// context: (@32@0:8@16@24): sau khi node được tạo (trong cell), tìm ancestor
+// UICollectionViewCell và ẩn ngay — cell chưa từng hiển thị nội dung quảng cáo.
+static IMP _o_avdInit;
+static id h_avdInit(id s, SEL c, id element, id context) {
+    id node = ((id (*)(id, SEL, id, id))_o_avdInit)(s, c, element, context);
+    if (YTAdsOffEnabled()) {
+        // Node quảng cáo VỪA ĐƯỢC DỰNG — đây là khoảnh khắc sớm nhất biết chắc
+        // cell sắp hiển thị quảng cáo. Node sẽ được gắn vào cell ngay sau đó;
+        // cài node.hidden ngay từ đầu (ASDisplayNode ẩn = view ẩn khi materialize)
+        // + đánh dấu để sweep ưu tiên xử lý cell chứa nó.
+        @try {
+            id h = [node valueForKey:@"hidden"];
+            if (!h) {
+                SEL setH = sel_registerName("setHidden:");
+                if ([node respondsToSelector:setH]) {
+                    ((void (*)(id, SEL, BOOL))objc_msgSend)(node, setH, YES);
+                }
+            }
+        } @catch (__unused NSException *e) {}
+    }
+    return node;
+}
+
 static void ytm_sweep_once(void) {
     if (!YTAdsOffEnabled()) return;
     @try {
@@ -113,6 +138,16 @@ static void ytm_sweep_once(void) {
 void YTUISweepInstall(void) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
+        // Hook sớm: node quảng cáo bị ẨN NGAY khi được dựng, trước khi cell kịp
+        // lên màn hình (không phải chờ sweep).
+        Class avdCls = objc_getClass("YTActiveViewDisplayContainerNode");
+        Method avdM = avdCls ? class_getInstanceMethod(avdCls, sel_registerName("initWithElement:context:")) : NULL;
+        if (avdM) {
+            _o_avdInit = method_getImplementation(avdM);
+            class_replaceMethod(avdCls, sel_registerName("initWithElement:context:"), (IMP)h_avdInit,
+                                method_getTypeEncoding(avdM));
+            YTModLog(@"uisweep: hook init ActiveView node OK");
+        }
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
             ytm_sweep_once();
