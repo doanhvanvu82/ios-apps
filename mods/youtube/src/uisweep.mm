@@ -17,17 +17,33 @@
 #import "common.h"
 #import "hooks.h"
 #import <UIKit/UIKit.h>
+#import <objc/runtime.h>
 
 static int g_sweepHitTotal = 0;
 static NSTimer *g_sweepTimer = nil;
 
+static int g_labelProbe = 0;
+
 static BOOL ytm_label_is_ad_disclaimer(UILabel *label) {
     NSString *t = label.text ?: @"";
-    if (!t.length || t.length > 40) return NO;
-    return ([t isEqualToString:@"Được tài trợ"] ||
-            [t isEqualToString:@"Sponsored"] ||
-            [t isEqualToString:@"Quảng cáo"] ||
-            [t isEqualToString:@"Ad"]);
+    if (!t.length || t.length > 60) return NO;
+    NSString *low = [t.lowercaseString stringByReplacingOccurrencesOfString:@"\u00a0" withString:@" "];
+    BOOL hit = ([low containsString:@"tài trợ"] ||
+                [low containsString:@"sponsored"] ||
+                [low containsString:@"quảng cáo"] ||
+                [low isEqualToString:@"ad"] ||
+                [low hasPrefix:@"ad ·"] ||
+                [low hasPrefix:@"ad•"]);
+    // Probe: log nhãn nào đó SUSP (chưa match) để biết text thật trên máy.
+    if (!hit && g_labelProbe < 60 && t.length >= 2 && t.length <= 40 &&
+        ([low containsString:@" trợ"] || [low containsString:@"sponsor"] ||
+         [low containsString:@"quảng"] || [low isEqualToString:@"ad"] ||
+         [low hasPrefix:@"ad "] || [low hasPrefix:@"ad·"])) {
+        g_labelProbe++;
+        YTModLog(@"uisweep-probe: nhãn chưa khớp: \"%@\" (class %@)", t,
+                 NSStringFromClass(object_getClass(label)));
+    }
+    return hit;
 }
 
 static void ytm_hide_ad_cell_from(UIView *root) {
