@@ -76,13 +76,29 @@ static void ytm_hide_ad_cell_from(UIView *root) {
 static void ytm_sweep_once(void) {
     if (!YTAdsOffEnabled()) return;
     @try {
+        static int tick = 0;
+        tick++;
+        int labels = 0, cells = 0;
         for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
             if (![scene isKindOfClass:[UIWindowScene class]]) continue;
             for (UIWindow *w in ((UIWindowScene *)scene).windows) {
                 if (w.hidden) continue;
+                // Đếm nhanh tổng UILabel trong mỗi window để chứng minh quét chạy.
+                NSMutableArray<UIView *> *stack = [NSMutableArray arrayWithObject:w];
+                while (stack.count) {
+                    UIView *v = stack.lastObject;
+                    [stack removeLastObject];
+                    if ([v isKindOfClass:[UILabel class]]) labels++;
+                    for (UIView *sub in v.subviews) [stack addObject:sub];
+                }
                 ytm_hide_ad_cell_from(w);
             }
         }
+        if (tick % 10 == 1 && labels) {
+            YTModLog(@"uisweep: tick %d — thấy %d UILabel (đã ẩn tổng %d cell ad)",
+                     tick, labels, g_sweepHitTotal);
+        }
+        (void)cells;
     } @catch (__unused NSException *e) {}
 }
 
