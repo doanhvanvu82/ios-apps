@@ -1,47 +1,58 @@
-// Chẩn đoán (mod 1.6): ghi log loại element/cell mà trang chủ dùng cho quảng
+// Chẩn đoán (mod 1.8): ghi log loại element/cell mà trang chủ dùng cho quảng
 // cáo để lọc chính xác. Không chặn gì ở đây — chỉ quan sát.
 #import "common.h"
 #import "hooks.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 
-static int g_descCount = 0;
-static NSMutableSet *g_descSeen = nil;
-static int g_cellCount = 0;
+static NSMutableSet *g_elemSeen = nil;
+static int g_elemCount = 0;
 static NSMutableSet *g_cellSeen = nil;
+static int g_cellCount = 0;
+static NSMutableSet *g_secSeen = nil;
+static int g_secCount = 0;
 
-// Mô tả element: YTLite so khớp [renderer description] với "brand_promo",
-// "feed_ad_metadata"… nên ghi mô tả thật của bản 21.44.4 về log.
+static BOOL ytm_interesting(NSString *s) {
+    if (!s.length) return NO;
+    NSString *low = [s lowercaseString];
+    return [low containsString:@"ad_logging"] || [low containsString:@"ad_slot"] ||
+           [low containsString:@"ad_event"] || [low containsString:@"promoted"] ||
+           [low containsString:@"promo"] || [low containsString:@"sponsored"];
+}
+
+// Element: chỉ khi mô tả nhắc tới ad/promo mới in đầy đủ (cắt bớt) — để thấy
+// chính xác loại renderer mà feed dùng cho quảng cáo.
 static IMP _o_elementData;
 static id h_elementData(id s, SEL c) {
     id v = ((id (*)(id, SEL))_o_elementData)(s, c);
     @try {
-        NSString *desc = [s description];
-        if (desc.length && g_descCount < 400) {
-            if (!g_descSeen) g_descSeen = [NSMutableSet new];
-            NSString *key = [NSString stringWithFormat:@"%@", desc];
-            if (![g_descSeen containsObject:key]) {
-                [g_descSeen addObject:key];
-                g_descCount++;
-                YTModLog(@"probe: ELEM %@", key.length > 200 ? [key substringToIndex:200] : key);
+        if (g_elemCount < 60) {
+            NSString *desc = [s description];
+            if (!g_elemSeen) g_elemSeen = [NSMutableSet new];
+            if (ytm_interesting(desc)) {
+                NSString *key = desc.length > 400 ? [desc substringToIndex:400] : desc;
+                if (![g_elemSeen containsObject:key]) {
+                    [g_elemSeen addObject:key];
+                    g_elemCount++;
+                    YTModLog(@"probe: ELEM-AD %@", key);
+                }
             }
         }
     } @catch (__unused NSException *e) {}
     return v;
 }
 
-// Mảng section của feed/watch: log class của từng phần tử + các getter quảng cáo
-// nào chúng trả lời (để lọc theo đúng selector).
+// Section: log class từng phần tử + getter quảng cáo nào nó trả lời.
 static IMP _o_secSec;
 static id h_secSec(id s, SEL c) {
     id v = ((id (*)(id, SEL))_o_secSec)(s, c);
-    if (g_cellCount < 60 && [v isKindOfClass:[NSArray class]]) {
-        if (!g_cellSeen) g_cellSeen = [NSMutableSet new];
+    if (g_secCount < 80 && [v isKindOfClass:[NSArray class]]) {
+        if (!g_secSeen) g_secSeen = [NSMutableSet new];
         for (id e in (NSArray *)v) {
             NSString *cn = NSStringFromClass(object_getClass(e));
-            if (!cn || [g_cellSeen containsObject:cn]) continue;
-            [g_cellSeen addObject:cn];
-            g_cellCount++;
+            if (!cn || [g_secSeen containsObject:cn]) continue;
+            [g_secSeen addObject:cn];
+            g_secCount++;
             NSMutableString *hits = [NSMutableString string];
             static const char *probes[] = {
                 "promotedVideoRenderer", "compactPromotedVideoRenderer",
@@ -67,20 +78,36 @@ static id h_secSec(id s, SEL c) {
     return v;
 }
 
-// Cell base: log class thật của cell đang được tính kích thước.
-static int g_szCount = 0;
+// Cell base: ghi class cell thật + entry/element của nó khi cell thuộc diện
+// ad/promo (theo tên class HOẶC theo mô tả entry).
+static int g_cellProbe = 0;
 static IMP _o_cellSize;
 static CGSize h_cellSize(id s, SEL c, CGSize size) {
     CGSize r = ((CGSize (*)(id, SEL, CGSize))_o_cellSize)(s, c, size);
-    if (g_szCount < 80) {
-        NSString *cn = NSStringFromClass(object_getClass(s));
-        NSString *low = [cn lowercaseString];
-        if (([low containsString:@"promot"] || [low containsString:@"promo"] ||
-             [low containsString:@"adcell"] || [low containsString:@"advideo"] ||
-             [low containsString:@"activeview"]) && r.height > 1) {
-            g_szCount++;
-            YTModLog(@"probe: CELL %@ size=%.0fx%.0f", cn, r.width, r.height);
-        }
+    if (g_cellProbe < 80) {
+        @try {
+            NSString *cn = NSStringFromClass(object_getClass(s));
+            id entry = nil;
+            if ([s respondsToSelector:sel_registerName("elementEntry")])
+                entry = ((id (*)(id, SEL))objc_msgSend)(s, sel_registerName("elementEntry"));
+            else if ([s respondsToSelector:sel_registerName("entry")])
+                entry = ((id (*)(id, SEL))objc_msgSend)(s, sel_registerName("entry"));
+            NSString *ecn = entry ? NSStringFromClass(object_getClass(entry)) : nil;
+            NSString *desc = [entry respondsToSelector:sel_registerName("description")]
+                                 ? [entry description] : nil;
+            BOOL hit = ytm_interesting(cn) || ytm_interesting(ecn) || ytm_interesting(desc);
+            if (hit) {
+                if (!g_cellSeen) g_cellSeen = [NSMutableSet new];
+                NSString *key = [NSString stringWithFormat:@"%@|%@|%.0f", cn, ecn, r.height];
+                if (![g_cellSeen containsObject:key]) {
+                    [g_cellSeen addObject:key];
+                    g_cellProbe++;
+                    NSString *d400 = desc.length > 400 ? [desc substringToIndex:400] : desc;
+                    YTModLog(@"probe: CELL %@ entry=%@ size=%.0fx%.0f\n%@",
+                             cn, ecn, r.width, r.height, d400);
+                }
+            }
+        } @catch (__unused NSException *e) {}
     }
     return r;
 }
@@ -108,12 +135,12 @@ void YTProbeInstall(void) {
             "YTActiveViewCellController", "YTElementsCellController",
             "YTVideoElementCellController",
         };
+        static IMP origs[3];
         for (size_t i = 0; i < sizeof(bases) / sizeof(bases[0]); i++) {
             Class b = objc_getClass(bases[i]);
             if (!b) continue;
             Method bm = class_getInstanceMethod(b, sel_registerName("cellSizeWithSize:"));
             if (!bm) continue;
-            static IMP origs[3];
             origs[i] = method_getImplementation(bm);
             class_replaceMethod(b, sel_registerName("cellSizeWithSize:"), (IMP)h_cellSize,
                                 method_getTypeEncoding(bm));
