@@ -53,6 +53,40 @@ static void ytm_hide_ad_cell_from(UIView *root) {
         UIView *v = stack.lastObject;
         [stack removeLastObject];
         if (v.hidden) continue;
+        NSString *clsName = NSStringFromClass(object_getClass(v));
+        if ([clsName containsString:@"TextNode"]) {
+            // ASTextNode: text nằm ở attributedString/string của node.
+            NSString *txt = nil;
+            @try {
+                id s1 = [v valueForKey:@"attributedString"];
+                if ([s1 isKindOfClass:[NSAttributedString class]]) txt = [(NSAttributedString *)s1 string];
+                if (!txt) {
+                    id s2 = [v valueForKey:@"string"];
+                    if ([s2 isKindOfClass:[NSString class]]) txt = s2;
+                }
+            } @catch (__unused NSException *e) {}
+            if (txt.length && txt.length <= 60) {
+                static int tnProbe = 0;
+                if (tnProbe < 40) {
+                    tnProbe++;
+                    YTModLog(@"uisweep-probe: TextNode \"%@\" (%@)", txt, clsName);
+                }
+                NSString *low = [txt.lowercaseString stringByReplacingOccurrencesOfString:@"\u00a0" withString:@" "];
+                if ([low containsString:@"tài trợ"] || [low containsString:@"sponsored"] ||
+                    [low containsString:@"quảng cáo"]) {
+                    UIView *cell = v;
+                    while (cell && ![cell isKindOfClass:[UICollectionViewCell class]]) {
+                        cell = cell.superview;
+                    }
+                    if (cell && !cell.hidden) {
+                        cell.hidden = YES;
+                        g_sweepHitTotal++;
+                        YTModLog(@"uisweep: ẨN cell quảng cáo (TextNode \"%@\", tổng %d)", txt, g_sweepHitTotal);
+                    }
+                }
+            }
+            continue;
+        }
         if ([v isKindOfClass:[UILabel class]] &&
             ytm_label_is_ad_disclaimer((UILabel *)v)) {
             // Tìm ancestor UICollectionViewCell/UITableViewCell.
@@ -89,6 +123,10 @@ static void ytm_sweep_once(void) {
                     UIView *v = stack.lastObject;
                     [stack removeLastObject];
                     if ([v isKindOfClass:[UILabel class]]) labels++;
+                    // Texture (ASDK): text node của ELM cell không phải UILabel.
+                    // Đếm class có tên chứa 'TextNode'/'TextNode' để biết.
+                    NSString *cn = NSStringFromClass(object_getClass(v));
+                    if ([cn containsString:@"TextNode"]) labels++;
                     for (UIView *sub in v.subviews) [stack addObject:sub];
                 }
                 ytm_hide_ad_cell_from(w);
