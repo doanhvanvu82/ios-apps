@@ -4,10 +4,19 @@ import SwiftUI
 /// mọi thao tác (bật/tắt theo trang, API key, quét) nằm trong popup của extension.
 struct ContentView: View {
     private let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+    @State private var logContent = ""
+    @State private var showLog = false
 
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    Button("Xem log chẩn đoán") {
+                        loadLog()
+                        showLog = true
+                    }
+                }
+
                 Section("1. Bật tiện ích trong Safari") {
                     Step(number: 1, text: "Mở **Cài đặt › Ứng dụng › Safari › Tiện ích mở rộng**.")
                     Step(number: 2, text: "Chọn **AdsBlocker** và bật lên.")
@@ -52,6 +61,39 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
                     .padding(.bottom, 8)
             }
+            .sheet(isPresented: $showLog) {
+                NavigationStack {
+                    ScrollView {
+                        Text(logContent)
+                            .font(.system(.body, design: .monospaced))
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .navigationTitle("Log chẩn đoán")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Đóng") { showLog = false }
+                        }
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button("Tải lại") { loadLog() }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func loadLog() {
+        let logDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Logs")
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let today = dateFormatter.string(from: Date())
+        let logFile = logDir.appendingPathComponent("\(today).log")
+        do {
+            logContent = try String(contentsOf: logFile, encoding: .utf8)
+        } catch {
+            logContent = "Chưa có log: \(error.localizedDescription)"
         }
     }
 }
