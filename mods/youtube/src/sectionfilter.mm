@@ -294,6 +294,32 @@ static id h_bytesFromRenderers(id s, SEL c, id renderers) {
     return ((id (*)(id, SEL, id))_o_bytesFromRenderers)(s, c, clean ?: renderers);
 }
 
+// --- TẦNG NODE (log 3.2): cell ELM tạo node tại ELMNodeFactory ---------------
+// bytes hook cài OK nhưng 0 lượt — feed home không đi qua
+// YTBrowseContinuationSourceBlock. ELM dựng cell qua ELMNodeFactory
+// .nodeWithElement:materializationContext: (@32@0:8@16r^v24) — cổng tạo node
+// cho MỌI element. Element quảng cáo → nil: element không có node, không render
+// (caller xử nil: canCreateNodeForElement: là bước kiểm tra trước đó).
+static IMP _o_nodeWithElement;
+static id h_nodeWithElement(id s, SEL c, id element, void *matCtx) {
+    if (YTAdsOffEnabled() && element) {
+        @try {
+            NSString *desc = [element respondsToSelector:@selector(description)]
+                                 ? [element description] : @"";
+            if (ytm_desc_is_ad(desc ?: @"")) {
+                static int logged = 0;
+                if (logged < 200) {
+                    logged++;
+                    YTModLog(@"node: TỪ CHỐI tạo node cho element quảng cáo %@",
+                             NSStringFromClass(object_getClass(element)));
+                }
+                return nil;
+            }
+        } @catch (__unused NSException *e) {}
+    }
+    return ((id (*)(id, SEL, id, void *))_o_nodeWithElement)(s, c, element, matCtx);
+}
+
 // --- Tầng cell controller (createCellControllerForEntry:) -------------------
 // 2.7 BỎ: entry của hàm này là SECTION/entry lớn chứa element con — mô tả của
 // nó có thể chứa ad_logging_data của element con → trả nil làm TRỐNG CẢ FEED
@@ -399,9 +425,9 @@ static BOOL ytm_install_one(const char *clsName, const char *selName, IMP hook, 
 void YTSectionFilterInstall(void) {
     // Chỉ cài mỗi hook 1 lần: cài đè lên chính mình sẽ khiến *orig trỏ vào hook
     // của mình → đệ quy vô hạn.
-    static BOOL done[12];
+    static BOOL done[13];
     int n = 0;
-    struct { const char *cls; const char *sel; IMP hook; IMP *orig; const char *label; } all[12] = {
+    struct { const char *cls; const char *sel; IMP hook; IMP *orig; const char *label; } all[13] = {
         {"YTISectionListRenderer", "sectionRenderers", (IMP)h_sectionRenderers, &_o_sectionRenderers, "feed"},
         {"YTIWatchNextResponse", "sectionRenderers", (IMP)h_wnSectionRenderers, &_o_wnSectionRenderers, "watch"},
         {"ELMPBFeedData", "contents", (IMP)h_feedContents, &_o_feedContents, "elm"},
@@ -414,8 +440,9 @@ void YTSectionFilterInstall(void) {
         {"YTSectionController", "createCellControllerForEntry:", (IMP)h_cccSec, &_o_cccSec, "cell-sec"},
         {"ELMControllerFactory", "controllerWithElement:context:treeLocalContext:", (IMP)h_elmCtl, &_o_elmCtl, "elmctl"},
         {"YTBrowseContinuationSourceBlock", "createElementBytesArrayFromElementRenderers:", (IMP)h_bytesFromRenderers, &_o_bytesFromRenderers, "bytes"},
+        {"ELMNodeFactory", "nodeWithElement:materializationContext:", (IMP)h_nodeWithElement, &_o_nodeWithElement, "node"},
     };
-    for (int i = 0; i < 12; i++) {
+    for (int i = 0; i < 13; i++) {
         if (done[i]) { n++; continue; }
         if (ytm_install_one(all[i].cls, all[i].sel, all[i].hook, all[i].orig, all[i].label)) {
             done[i] = YES;
