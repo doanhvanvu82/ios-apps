@@ -51,6 +51,9 @@ void YTMenuInstall(void);
 // Ghi request/response mạng ra log (chẩn đoán lỗi tải dữ liệu).
 void YTDiagInstall(void);
 
+// Chặn quảng cáo ở tầng ad-slot (thử cài lại khi module lazy xuất hiện).
+void YTAdBlockInstall(void);
+
 #ifdef __cplusplus
 }
 #endif

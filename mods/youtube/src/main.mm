@@ -7,6 +7,7 @@ static void ytm_did_finish_launch(void) {
     YTModLog(@"app đã launch — cài hook");
     YTHooksInstall();
     YTDiagInstall();
+    YTAdBlockInstall();
     if (YTModBool(YTKeyMenu, YES)) {
         YTMenuInstall();
     }
