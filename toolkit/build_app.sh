@@ -103,7 +103,7 @@ ls -lh "$IPA"
 # 7. Source AltStore chung + server LAN
 # ---------------------------------------------------------------------------
 echo
-python3 "$TOOLKIT/sidestore_source.py"
+SOURCE_KEEP_MODS=1 python3 "$TOOLKIT/sidestore_source.py"
 # CI (GitHub Actions) không cần server LAN — tránh setsid (không có trên macOS).
 if [ -z "${CI:-}" ]; then
     "$TOOLKIT/serve_sidestore.sh"

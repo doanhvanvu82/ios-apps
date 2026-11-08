@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Mod build local: LAN source giữ cả mod.
+export SOURCE_KEEP_MODS=1
 #
 # Server LAN cho iPhone (toolkit/dev_server.py): phục vụ sidestore/ để
 # Ksign tải bản build mới của mọi app + nhận clipboard từ nút
@@ -23,7 +25,8 @@ if [ "${1:-}" = "stop" ]; then
 fi
 
 # Ghi lại source.json theo IP LAN hiện tại (đổi mạng thì IP đổi) và in URL để chép vào Ksign.
-print_source() { python3 toolkit/sidestore_source.py | tail -1; }
+# Mod build local — LAN source vẫn phân phối mod (SOURCE_KEEP_MODS=1).
+print_source() { SOURCE_KEEP_MODS=1 python3 toolkit/sidestore_source.py | tail -1; }
 
 if running; then
     echo "Server LAN đang chạy (port $PORT)."

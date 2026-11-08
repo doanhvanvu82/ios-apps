@@ -148,13 +148,17 @@ def collect_ipas():
     except FileNotFoundError:
         pass
 
+    keep_mods = bool(os.environ.get("SOURCE_KEEP_MODS"))
     ipas = []
-    for area in ("apps", "mods"):
+    areas = ("apps", "mods")
+    for area in areas:
+        if area == "mods" and os.environ.get("SOURCE_NO_MODS"):
+            continue
         for entry in sorted(glob.glob(os.path.join(ROOT, area, "*"))):
             base = os.path.basename(entry)
             rel = f"{area}/{base}"
             # Tôn trọng build-exclude.txt: mục không build thì không có trong source.
-            if base in excluded or rel in excluded:
+            if (base in excluded or rel in excluded) and not (keep_mods and area == "mods"):
                 continue
             for sub in ("xtool", "out"):
                 found = sorted(glob.glob(os.path.join(entry, sub, "*.ipa")),
