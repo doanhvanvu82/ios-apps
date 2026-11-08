@@ -54,6 +54,9 @@ void YTDiagInstall(void);
 // Chặn quảng cáo ở tầng ad-slot (thử cài lại khi module lazy xuất hiện).
 void YTAdBlockInstall(void);
 
+// TRACER tạm thời: log method void của pipeline ad (tìm đường ads thật).
+void YTTraceInstall(void);
+
 #ifdef __cplusplus
 }
 #endif

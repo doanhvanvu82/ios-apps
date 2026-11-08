@@ -8,6 +8,7 @@ static void ytm_did_finish_launch(void) {
     YTHooksInstall();
     YTDiagInstall();
     YTAdBlockInstall();
+    YTTraceInstall();
     if (YTModBool(YTKeyMenu, YES)) {
         YTMenuInstall();
     }
