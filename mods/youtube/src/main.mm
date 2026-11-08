@@ -15,7 +15,15 @@ static void ytm_did_finish_launch(void) {
 
 __attribute__((constructor)) static void ytm_init(void) {
     YTModLogOpen();
-    YTModLog(@"dylib nạp (mod %s)", YT_VERSION_TAG);
+    YTModLog(@"dylib nạp (mod %s, build %s)", YT_VERSION_TAG, YT_BUILD_LABEL);
+    // Về foreground (scene mới) thì thử cài lại hook ad — module lazy có thể
+    // chưa có lúc launch. YTAdBlockInstall chỉ chạy 1 lần nên gọi ở đây an toàn.
+    [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification
+                                                      object:nil
+                                                       queue:[NSOperationQueue mainQueue]
+                                                  usingBlock:^(__unused NSNotification *note) {
+        YTAdBlockInstall();
+    }];
     // Dylib nạp trước UIApplicationMain: chờ notification launch. Nếu app đã
     // launch từ trước (không xảy ra với LC_LOAD_DYLIB nhưng để chắc), dùng timer.
     if ([UIApplication sharedApplication]) {

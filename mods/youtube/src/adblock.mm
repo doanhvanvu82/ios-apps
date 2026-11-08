@@ -1,8 +1,13 @@
 // Chặn quảng cáo ở tầng "ad slot" — nơi iOS 21.x thực sự dựng quảng cáo.
 //
-// Hook player-response (isMonetized…) chỉ tắt cờ; video quảng cáo vẫn được
-// tạo từ AdBreakResponse → AdSlotRenderer → AdSlot rồi chèn vào player. Các
-// class dưới đây thuộc module tải lười (lazy), nên phải thử cài lại nhiều lần
+// Chỉ hook các điểm AN TOÀN:
+//  - hàm void của pipeline ads: bỏ thân hàm (không dựng/không xử lý ad);
+//  - getter trả danh sách ad: trả rỗng;
+//  - getter trả player response của ad: trả nil.
+// KHÔNG trả nil từ hàm init/create (vd initWithSlotID… của YTAdSlot): caller gốc
+// dùng kết quả ngay → crash EXC_BAD_ACCESS (SIGSEGV) tại objc_retain.
+//
+// Các class ad của YouTube thuộc module tải lười nên phải thử cài lại nhiều lần
 // sau khi app chạy chứ không chỉ lúc launch.
 #import "common.h"
 #import "hooks.h"
@@ -12,44 +17,45 @@
 typedef struct {
     const char *cls;
     const char *sel;
-    BOOL returnsObject; // YES: trả nil để chặn; NO: bỏ qua thân hàm (void)
     IMP hook;
     IMP *orig;
     const char *label;
 } YTMAdHook;
 
-static IMP _orig_createSlot;
-static id ytm_createSlot(id self, SEL _cmd, id renderer) {
+// --- Bỏ thân hàm void -------------------------------------------------------
+static IMP _orig_controlFlowStart;static void ytm_controlFlowStart(id self, SEL _cmd, id slots, id ctx) {
     if (YTAdsOffEnabled()) {
-        YTModLog(@"ads: bỏ createSlotFromAdSlotRenderer");
-        return nil;
+        YTModLog(@"ads: bỏ lifecycle ad slots");
+        return;
     }
-    return ((id (*)(id, SEL, id))_orig_createSlot)(self, _cmd, renderer);
+    ((void (*)(id, SEL, id, id))_orig_controlFlowStart)(self, _cmd, slots, ctx);
 }
 
-static IMP _orig_adSlotInit;
-static id ytm_adSlotInit(id self, SEL _cmd, id sid, id type, id manager, id meta,
-                         id phys, id entry, id fulfill, id expir, id logging) {
-    if (YTAdsOffEnabled()) {
-        YTModLog(@"ads: bỏ dựng YTAdSlot");
-        return nil;
-    }
-    return ((id (*)(id, SEL, id, id, id, id, id, id, id, id, id))_orig_adSlotInit)(
-        self, _cmd, sid, type, manager, meta, phys, entry, fulfill, expir, logging);
+static IMP _orig_v2DidReceive;
+static void ytm_v2DidReceive(id self, SEL _cmd, id resp, id slot) {
+    if (YTAdsOffEnabled()) return;
+    ((void (*)(id, SEL, id, id))_orig_v2DidReceive)(self, _cmd, resp, slot);
 }
 
-static IMP _orig_rendererAdapterInit;
-static id ytm_rendererAdapterInit(id self, SEL _cmd, id renderer) {
-    if (YTAdsOffEnabled()) return nil;
-    return ((id (*)(id, SEL, id))_orig_rendererAdapterInit)(self, _cmd, renderer);
+static IMP _orig_didReceiveCommand;
+static void ytm_didReceiveCommand(id self, SEL _cmd, id cmd, id sender) {
+    if (YTAdsOffEnabled()) return;
+    ((void (*)(id, SEL, id, id))_orig_didReceiveCommand)(self, _cmd, cmd, sender);
 }
 
-static IMP _orig_breakAdapterInit;
-static id ytm_breakAdapterInit(id self, SEL _cmd, id renderer) {
-    if (YTAdsOffEnabled()) return nil;
-    return ((id (*)(id, SEL, id))_orig_breakAdapterInit)(self, _cmd, renderer);
+static IMP _orig_executeCommand;
+static void ytm_executeCommand(id self, SEL _cmd, id cmd, id entry, id view, id sender) {
+    if (YTAdsOffEnabled()) return;
+    ((void (*)(id, SEL, id, id, id, id))_orig_executeCommand)(self, _cmd, cmd, entry, view, sender);
 }
 
+static IMP _orig_didReceiveAdSlots;
+static void ytm_didReceiveAdSlots(id self, SEL _cmd, id slots, id ctx) {
+    if (YTAdsOffEnabled()) return;
+    ((void (*)(id, SEL, id, id))_orig_didReceiveAdSlots)(self, _cmd, slots, ctx);
+}
+
+// --- Getter danh sách ad → rỗng --------------------------------------------
 static IMP _orig_adSlotRenderers;
 static id ytm_adSlotRenderers(id self, SEL _cmd) {
     if (YTAdsOffEnabled()) return @[];
@@ -62,60 +68,45 @@ static id ytm_adArrayFromLayout(id self, SEL _cmd, id layout, id breaks) {
     return ((id (*)(id, SEL, id, id))_orig_adArrayFromLayout)(self, _cmd, layout, breaks);
 }
 
+// --- Getter player response của ad → nil -----------------------------------
 static IMP _orig_adPlayerResponse;
 static id ytm_adPlayerResponse(id self, SEL _cmd) {
     if (YTAdsOffEnabled()) return nil;
     return ((id (*)(id, SEL))_orig_adPlayerResponse)(self, _cmd);
 }
 
-static IMP _orig_controlFlowStart;
-static void ytm_controlFlowStart(id self, SEL _cmd, id slots, id ctx) {
-    if (YTAdsOffEnabled()) return;
-    ((void (*)(id, SEL, id, id))_orig_controlFlowStart)(self, _cmd, slots, ctx);
-}
-
-static IMP _orig_v2DidReceive;
-static void ytm_v2DidReceive(id self, SEL _cmd, id resp, id slot) {
-    if (YTAdsOffEnabled()) return;
-    ((void (*)(id, SEL, id, id))_orig_v2DidReceive)(self, _cmd, resp, slot);
-}
-
 static const YTMAdHook YTM_AD_HOOKS[] = {
-    {"YTBaseOpportunityAdapter", "createSlotFromAdSlotRenderer:", YES,
-     (IMP)ytm_createSlot, &_orig_createSlot, "ads: createSlot"},
-    {"YTAdSlot", "initWithSlotID:slotType:managerLayer:metadata:slotPhysicalPosition:"
-                 "slotEntryTriggers:slotFulfillmentTriggers:slotExpirationTriggers:adSlotLoggingData:", YES,
-     (IMP)ytm_adSlotInit, &_orig_adSlotInit, "ads: YTAdSlot init"},
-    {"YTAdSlotRendererAdapter", "initWithAdSlotRenderer:", YES,
-     (IMP)ytm_rendererAdapterInit, &_orig_rendererAdapterInit, "ads: renderer adapter"},
-    {"YTAdSlotRendererAdapter", "initWithPrerollAdSlotRendererLegacy:", YES,
-     (IMP)ytm_rendererAdapterInit, &_orig_rendererAdapterInit, "ads: preroll adapter"},
-    {"YTAdBreakRendererAdapter", "initWithAdBreakRenderer:", YES,
-     (IMP)ytm_breakAdapterInit, &_orig_breakAdapterInit, "ads: break adapter"},
-    {"YTAdClientOrganicMetadata", "adSlotRenderers", YES,
-     (IMP)ytm_adSlotRenderers, &_orig_adSlotRenderers, "ads: adSlotRenderers=[]"},
-    {"YTAdBreakResponseReceivedOpportunityAdapterImpl",
-     "adArrayFromPlayerBytesAdLayoutRenderer:adBreaks:", YES,
-     (IMP)ytm_adArrayFromLayout, &_orig_adArrayFromLayout, "ads: adArray=[]"},
-    {"YTPlayerResponse", "adPlayerResponse", YES,
-     (IMP)ytm_adPlayerResponse, &_orig_adPlayerResponse, "ads: adPlayerResponse=nil"},
-    {"YTAdsControlFlowManagerImpl", "lifecycleDidStartForAdSlots:context:", NO,
+    {"YTAdsControlFlowOpportunityReceivedCommandHandlerImpl",
+     "executeWithCommand:entry:fromView:sender:",
+     (IMP)ytm_executeCommand, &_orig_executeCommand, "ads: bỏ execute command"},
+    {"YTCommandDrivenExternallyManagedSlotOpportunityAdapter",
+     "didReceiveCommand:fromSender:",
+     (IMP)ytm_didReceiveCommand, &_orig_didReceiveCommand, "ads: bỏ receive command"},
+    {"YTBaseOpportunityAdapter", "didReceiveAdSlots:adOpportunityContext:",
+     (IMP)ytm_didReceiveAdSlots, &_orig_didReceiveAdSlots, "ads: bỏ didReceiveAdSlots"},
+    {"YTAdsControlFlowManagerImpl", "lifecycleDidStartForAdSlots:context:",
      (IMP)ytm_controlFlowStart, &_orig_controlFlowStart, "ads: bỏ control flow"},
     {"YTAdBreakResponseReceivedOpportunityAdapterV2",
-     "didReceiveAdBreakResponse:fromAdBreakSlot:", NO,
+     "didReceiveAdBreakResponse:fromAdBreakSlot:",
      (IMP)ytm_v2DidReceive, &_orig_v2DidReceive, "ads: bỏ adBreak V2"},
+    {"YTAdClientOrganicMetadata", "adSlotRenderers",
+     (IMP)ytm_adSlotRenderers, &_orig_adSlotRenderers, "ads: adSlotRenderers=[]"},
+    {"YTAdBreakResponseReceivedOpportunityAdapterImpl",
+     "adArrayFromPlayerBytesAdLayoutRenderer:adBreaks:",
+     (IMP)ytm_adArrayFromLayout, &_orig_adArrayFromLayout, "ads: adArray=[]"},
+    {"YTPlayerResponse", "adPlayerResponse",
+     (IMP)ytm_adPlayerResponse, &_orig_adPlayerResponse, "ads: adPlayerResponse=nil"},
 };
 
 #define YTM_AD_HOOK_COUNT ((int)(sizeof(YTM_AD_HOOKS) / sizeof(YTM_AD_HOOKS[0])))
 
-static BOOL g_adDone[sizeof(YTM_AD_HOOKS) / sizeof(YTM_AD_HOOKS[0])];
+static BOOL g_adDone[YTM_AD_HOOK_COUNT];
 
 static int ytm_ad_install_pass(BOOL verbose) {
-    int done = 0, total = 0;
+    int done = 0;
     for (int i = 0; i < YTM_AD_HOOK_COUNT; i++) {
-        if (g_adDone[i]) { done++; total++; continue; }
+        if (g_adDone[i]) { done++; continue; }
         const YTMAdHook *h = &YTM_AD_HOOKS[i];
-        total++;
         Class cls = objc_getClass(h->cls);
         if (!cls) continue;
         Method m = class_getInstanceMethod(cls, sel_registerName(h->sel));

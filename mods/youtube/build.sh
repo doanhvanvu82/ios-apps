@@ -27,7 +27,9 @@ WORK="$HERE/work"
 OUT="$HERE/out"
 APP_NAME="YouTube"
 DYLIB_NAME="libyoutubemod.dylib"
-MOD_VERSION="${MOD_VERSION:-1.0}"
+MOD_VERSION="${MOD_VERSION:-1.1}"
+# Nhãn build hiển thị trong menu (biết đang dùng bản mới hay cũ).
+BUILD_LABEL="${BUILD_LABEL:-$(date +%y%m%d-%H%M)}"
 # Mặc định giữ bundle id gốc: đổi id thì Google chặn đăng nhập và không trả
 # dữ liệu trang chủ/video (xem đầu file).
 if [ -z "${SUFFIX+x}" ]; then SUFFIX=""; fi
@@ -160,6 +162,7 @@ build_dylib() {
     "$CLANG" -target arm64-apple-ios17.0 -isysroot "$SDK" \
       -fobjc-arc -O2 -fvisibility=hidden -Wno-deprecated-declarations \
       -DYT_VERSION_TAG="\"$MOD_VERSION\"" \
+      -DYT_BUILD_LABEL="\"$BUILD_LABEL\"" \
       -I "$HERE/src" \
       -c "$s" -o "$o"
     objs+=("$o")

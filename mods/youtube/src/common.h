@@ -5,6 +5,14 @@
 
 #import <Foundation/Foundation.h>
 
+// build.sh truyền vào; thiếu thì vẫn biên dịch được (build tay).
+#ifndef YT_VERSION_TAG
+#define YT_VERSION_TAG "dev"
+#endif
+#ifndef YT_BUILD_LABEL
+#define YT_BUILD_LABEL "dev"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -51,7 +51,7 @@ static UISwitch *YTMakeSwitch(BOOL on, id target, SEL action) {
 
 - (void)buildPanel {
     CGFloat w = 250;
-    UIView *p = [[UIView alloc] initWithFrame:CGRectMake(0, 0, w, 176)];
+    UIView *p = [[UIView alloc] initWithFrame:CGRectMake(0, 0, w, 200)];
     p.backgroundColor = [UIColor colorWithWhite:0.10 alpha:0.97];
     p.layer.cornerRadius = 14;
     p.layer.masksToBounds = YES;
@@ -61,29 +61,35 @@ static UISwitch *YTMakeSwitch(BOOL on, id target, SEL action) {
     title.frame = CGRectMake(16, 12, w - 32, 22);
     [p addSubview:title];
 
-    UILabel *sub = YTLabel([NSString stringWithFormat:@"%d/%d hook hoạt động",
+    NSString *appVer = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"?";
+    UILabel *ver = YTLabel([NSString stringWithFormat:@"YT %@ · mod %s", appVer, YT_VERSION_TAG],
+                           [UIFont systemFontOfSize:11], [UIColor colorWithWhite:1 alpha:0.75]);
+    ver.frame = CGRectMake(16, 34, w - 32, 16);
+    [p addSubview:ver];
+
+    UILabel *sub = YTLabel([NSString stringWithFormat:@"build %s · %d/%d hook", YT_BUILD_LABEL,
                             YTHooksAvailable(), YTHooksAvailable() + YTHooksFailed()],
                            [UIFont systemFontOfSize:11], [UIColor colorWithWhite:1 alpha:0.55]);
-    sub.frame = CGRectMake(16, 34, w - 32, 16);
+    sub.frame = CGRectMake(16, 50, w - 32, 16);
     [p addSubview:sub];
 
     UILabel *ads = YTLabel(@"Chặn quảng cáo", [UIFont systemFontOfSize:14], UIColor.whiteColor);
-    ads.frame = CGRectMake(16, 64, 150, 20);
+    ads.frame = CGRectMake(16, 80, 150, 20);
     [p addSubview:ads];
     UISwitch *adsSwitch = YTMakeSwitch(YTModBool(YTKeyAdsOff, YES), self, @selector(adsChanged:));
-    adsSwitch.frame = CGRectMake(w - 16 - 51, 60, 51, 31);
+    adsSwitch.frame = CGRectMake(w - 16 - 51, 76, 51, 31);
     [p addSubview:adsSwitch];
 
     UILabel *bg = YTLabel(@"Phát nền / PiP", [UIFont systemFontOfSize:14], UIColor.whiteColor);
-    bg.frame = CGRectMake(16, 108, 150, 20);
+    bg.frame = CGRectMake(16, 124, 150, 20);
     [p addSubview:bg];
     UISwitch *bgSwitch = YTMakeSwitch(YTModBool(YTKeyBackground, YES), self, @selector(bgChanged:));
-    bgSwitch.frame = CGRectMake(w - 16 - 51, 104, 51, 31);
+    bgSwitch.frame = CGRectMake(w - 16 - 51, 120, 51, 31);
     [p addSubview:bgSwitch];
 
     UILabel *note = YTLabel(@"Lưu ngay lập tức · áp dụng không cần khởi động lại",
                             [UIFont systemFontOfSize:10], [UIColor colorWithWhite:1 alpha:0.45]);
-    note.frame = CGRectMake(16, 150, w - 32, 14);
+    note.frame = CGRectMake(16, 174, w - 32, 14);
     [p addSubview:note];
 
     self.panel = p;
@@ -105,7 +111,7 @@ static UISwitch *YTMakeSwitch(BOOL on, id target, SEL action) {
 - (void)positionInWindow:(UIWindow *)window {
     CGSize size = window.bounds.size;
     if (!self.panel) [self buildPanel];
-    self.panel.frame = CGRectMake(size.width - 250 - 12, 60, 250, 176);
+    self.panel.frame = CGRectMake(size.width - 250 - 12, 60, 250, 200);
     [window addSubview:self.panel];
 
     if (!g_floatingButton) {

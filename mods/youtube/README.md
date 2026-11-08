@@ -4,11 +4,19 @@ Tiêm dylib ObjC++ vào IPA YouTube **đã giải mã** (bản dump từ thiết
 
 - **Chặn quảng cáo**: trả `NO` cho các cờ monetized/preroll của `YTIPlayerResponse`,
   chặn `YTAdBreakServiceImpl` request ad, và chặn ở tầng **ad-slot** (nơi iOS 21.x
-  thực sự dựng quảng cáo): `createSlotFromAdSlotRenderer:` → nil,
-  `YTAdSlotRendererAdapter`/`YTAdBreakRendererAdapter` init → nil,
-  `adSlotRenderers`/`adArrayFromPlayerBytesAdLayoutRenderer:adBreaks:` → `[]`,
-  `adPlayerResponse` → nil. Các class ad của YouTube thuộc module tải lười nên
-  `adblock.mm` thử cài lại mỗi 2 giây trong 20 giây đầu (xem log `ads: OK`).
+  thực sự dựng quảng cáo). `adblock.mm` chỉ hook **điểm an toàn**: hàm `void`
+  của pipeline (`executeWithCommand:`, `didReceiveCommand:`, `didReceiveAdSlots:`,
+  `lifecycleDidStartForAdSlots:`, `didReceiveAdBreakResponse:`) bỏ thân hàm;
+  getter danh sách (`adSlotRenderers`, `adArrayFromPlayerBytesAdLayoutRenderer:adBreaks:`)
+  trả `[]`; `adPlayerResponse` trả nil. Các class ad thuộc module tải lười nên
+  thử cài lại mỗi 2 giây trong 20 giây đầu và mỗi lần app về foreground
+  (log `ads: OK`).
+  **Bẫy**: KHÔNG trả nil từ hàm `init`/`create` của pipeline ad
+  (`YTAdSlot initWithSlotID…`, `createSlotFromAdSlotRenderer:`) — caller gốc dùng
+  kết quả ngay → crash `EXC_BAD_ACCESS` tại `objc_retain`
+  (`YTSlotFactoryImpl.slotFromAdSlotMetadata:controlFlowLayer:`).
+- **Menu YT**: hiện `YT <phiên bản app> · mod <MOD_VERSION>` và `build <nhãn giờ>`
+  để biết đang chạy bản mới hay cũ (version app luôn là `21.44.4`).
 - **Phát nền / PiP**: ép `isBackgroundableByUserSettings` /
   `isPlayableInBackground` / `isPlayableInPictureInPicture` = `YES`,
   `HAMPlayer.setAllowsBackgroundPlayback:` = `YES`, tắt `isPipOffByDefault`.
