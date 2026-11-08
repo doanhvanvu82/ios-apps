@@ -163,6 +163,17 @@ final class SyncEngine: ObservableObject {
             return
         }
 
+        // 0.5) CHẨN ĐOÁN: luôn log trạng thái — sync im lặng không giải thích
+        // được gì cho người dùng (bug 08/11: 3 tiếng không hiểu app đang nghĩ gì).
+        let snap = index.snapshot()
+        let idxFiles = snap.nodes.values.filter { !$0.isDirectory }
+        let unfinished = idxFiles.filter { node in
+            guard let parts = node.parts else { return true }
+            return parts.isEmpty || parts.contains { $0.driveFileId == nil || $0.accountEmail.isEmpty }
+        }.count
+        let scanned = store.scanAll()
+        AppLog.log("sync", "📊 Index \(snap.nodes.count) node (\(idxFiles.count) file, \(snap.nodes.count - idxFiles.count) thư mục, \(unfinished) file chưa upload xong) · mirror \(scanned.files.count) file · journal \(journal.count) op · rev \(snap.rev)")
+
         // 1) KHÔI PHỤC: nếu index rỗng local nhưng Drive có index (cài lại) → nạp.
         await restoreIndexIfNeeded(rootIDs: rootIDs)
 
@@ -672,11 +683,15 @@ final class SyncEngine: ObservableObject {
     private func mirrorIndex(rootIDs: [String: String]) async {
         index.save()
         let snapshot = index.snapshot()
-        guard !snapshot.nodes.isEmpty else { return }
+        guard !snapshot.nodes.isEmpty else {
+            AppLog.log("sync", "📤 Index rỗng — bỏ qua mirror index.json")
+            return
+        }
         let enc = JSONEncoder()
         enc.dateEncodingStrategy = .iso8601
         guard let data = try? enc.encode(IndexPayload(nodes: snapshot.nodes, rev: snapshot.rev)) else { return }
 
+        var pushed = 0
         for (email, _) in rootIDs {
             guard let client = accounts.client(for: email) else { continue }
             do {
@@ -702,10 +717,12 @@ final class SyncEngine: ObservableObject {
                         try? FileManager.default.removeItem(at: tmp)
                     }
                 }
+                pushed += 1
             } catch {
                 AppLog.log("sync", "⚠️ Không mirror được index lên \(email): \(error.localizedDescription)")
             }
         }
+        AppLog.log("sync", "📤 Mirror index.json (\(snapshot.nodes.count) node, rev \(snapshot.rev), \(ByteFmt.string(Int64(data.count)))) → \(pushed)/\(rootIDs.count) account")
     }
 
     // MARK: - Khôi phục index sau cài lại
