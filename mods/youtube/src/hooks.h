@@ -71,8 +71,14 @@ void YTAutoPiPInstall(void);
 // Quét UI ẩn cell quảng cáo theo nhãn "Được tài trợ" (cổng UI cuối cùng).
 void YTUISweepInstall(void);
 
+// Chẩn đoán mất login: log cookie SSO mỗi lần app vào foreground.
+void YTKeychainDiagInstall(void);
+
 // Quét UI ẩn cell quảng cáo theo nhãn "Được tài trợ" (cổng UI cuối cùng).
 void YTUISweepInstall(void);
+
+// Chẩn đoán mất login: log cookie SSO mỗi lần app vào foreground.
+void YTKeychainDiagInstall(void);
 
 #ifdef __cplusplus
 }

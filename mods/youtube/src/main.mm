@@ -9,6 +9,7 @@ static void ytm_did_finish_launch(void) {
     YTProbeInstall();
     YTHooksInstall();
     YTDiagInstall();
+    YTKeychainDiagInstall();
     YTAdBlockInstall();
     YTPromoBlockInstall();
     YTSectionFilterInstall();
