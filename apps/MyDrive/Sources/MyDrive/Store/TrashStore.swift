@@ -125,7 +125,14 @@ final class TrashStore: ObservableObject {
 
     /// Khôi phục về vị trí cũ: trả dữ liệu stash về mirror, đăng ký lại index
     /// và các op (upload part thiếu, untrash part đã có — engine xử lý).
+    /// NỀN: moveItem đĩa (thư mục lớn) không được chặn main — UI gọi async.
     func restore(_ item: Item) {
+        Task.detached(priority: .userInitiated) { [weak self] in
+            await self?.restoreInBackground(item)
+        }
+    }
+
+    private func restoreInBackground(_ item: Item) async {
         let store = FileSystemStore.shared
         let index = IndexStore.shared
         let journal = Journal.shared
@@ -187,7 +194,7 @@ final class TrashStore: ObservableObject {
         // op này chạy sau các op upload phía trên).
         journal.enqueue(.restoreTrash(path: destPath, node: node))
 
-        DispatchQueue.main.async { [weak self] in
+        await MainActor.run { [weak self] in
             guard let self else { return }
             self.items.removeAll { $0.id == item.id }
             self.persist()

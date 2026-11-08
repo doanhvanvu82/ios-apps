@@ -629,60 +629,83 @@ struct FilesView: View {
     }
 
     private func deleteSelected() {
-        for key in selectedPaths {
-            let comps = key.components
-            let p = key
-            try? store.remove(at: comps)
-            Journal.shared.enqueue(.delete(path: p, snapshot: nil))
-        }
+        let keys = Array(selectedPaths)
         exitSelection()
-        engine.triggerSync()
+        Task.detached(priority: .userInitiated) {
+            for key in keys {
+                try? store.remove(at: key.components)
+                Journal.shared.enqueue(.delete(path: key, snapshot: nil))
+            }
+            await MainActor.run { SyncEngine.shared.triggerSync() }
+        }
     }
 
     private func moveEntries(_ keys: [String], to dest: [String]) {
-        for key in keys {
-            let comps = key.components
-            guard let name = comps.last else { continue }
-            let to = dest + [name]
-            guard comps != to else { continue }
-            try? store.move(from: comps, to: to)
-            moveIndexEntries(from: key, to: to.joined(separator: "/"), isDirectory: isDirectory(key), newName: name)
-            Journal.shared.enqueue(.move(from: key, to: to.joined(separator: "/")))
-        }
+        let store = self.store
         exitSelection()
-        engine.triggerSync()
+        Task.detached(priority: .userInitiated) {
+            for key in keys {
+                let comps = key.components
+                guard let name = comps.last else { continue }
+                let to = dest + [name]
+                guard comps != to else { continue }
+                try? store.move(from: comps, to: to)
+                Self.moveIndexEntries(from: key, to: to.joined(separator: "/"), isDirectory: Self.isDirectory(key), newName: name)
+                Journal.shared.enqueue(.move(from: key, to: to.joined(separator: "/")))
+            }
+            await MainActor.run { SyncEngine.shared.triggerSync() }
+        }
     }
 
-    private func isDirectory(_ key: String) -> Bool {
+    private static func isDirectory(_ key: String) -> Bool {
         IndexStore.shared.node(at: key)?.isDirectory ?? false
     }
 
-    private func copyEntries(_ keys: [String], to dest: [String]) {
-        for key in keys {
-            let comps = key.components
-            guard let name = comps.last else { continue }
-            var newName = name
-            var n = 2
-            while store.exists(at: dest + [newName])
-                || IndexStore.shared.node(at: (dest + [newName]).joined(separator: "/")) != nil {
-                newName = uniquedCopyName(for: name, n)
-                n += 1
-                if n > 999 { break }
-            }
-            let target = dest + [newName]
-            if isDirectory(key) {
-                try? store.copyDirectory(from: store.url(for: comps), to: target)
-                registerImportedFolder(target)
-            } else {
-                try? store.copyFile(from: store.url(for: comps), to: target)
-                registerImportedFile(target)
+    private static func moveIndexEntries(from: String, to: String, isDirectory: Bool, newName: String) {
+        let idx = IndexStore.shared
+        if var node = idx.node(at: from) {
+            node.name = newName
+            idx.upsert(path: to, node: node)
+            idx.remove(path: from)
+            if isDirectory {
+                for (childPath, childNode) in idx.allNodes() where childPath.hasPrefix(from + "/") {
+                    let newChild = to + childPath.dropFirst(from.count)
+                    idx.upsert(path: newChild, node: childNode)
+                    idx.remove(path: childPath)
+                }
             }
         }
-        exitSelection()
-        engine.triggerSync()
     }
 
-    private func uniquedCopyName(for name: String, _ n: Int) -> String {
+    private func copyEntries(_ keys: [String], to dest: [String]) {
+        let store = self.store
+        exitSelection()
+        Task.detached(priority: .userInitiated) {
+            for key in keys {
+                let comps = key.components
+                guard let name = comps.last else { continue }
+                var newName = name
+                var n = 2
+                while store.exists(at: dest + [newName])
+                    || IndexStore.shared.node(at: (dest + [newName]).joined(separator: "/")) != nil {
+                    newName = Self.uniquedCopyName(for: name, n)
+                    n += 1
+                    if n > 999 { break }
+                }
+                let target = dest + [newName]
+                if Self.isDirectory(key) {
+                    try? store.copyDirectory(from: store.url(for: comps), to: target)
+                    Self.registerImportedFolder(target)
+                } else {
+                    try? store.copyFile(from: store.url(for: comps), to: target)
+                    Self.registerImportedFile(target)
+                }
+            }
+            await MainActor.run { SyncEngine.shared.triggerSync() }
+        }
+    }
+
+    private static func uniquedCopyName(for name: String, _ n: Int) -> String {
         let base = (name as NSString).deletingPathExtension
         let ext = (name as NSString).pathExtension
         return ext.isEmpty ? "\(base) (\(n))" : "\(base) (\(n)).\(ext)"
@@ -708,42 +731,53 @@ struct FilesView: View {
         guard newName != target.name else { return }
         let from = path + [target.name]
         let to = path + [newName]
-        try? store.move(from: from, to: to)
-        moveIndexEntries(from: from.joined(separator: "/"), to: to.joined(separator: "/"), isDirectory: target.isDirectory, newName: newName)
-        Journal.shared.enqueue(.rename(from: from.joined(separator: "/"), to: to.joined(separator: "/")))
-        engine.triggerSync()
+        let store = self.store
+        renameTarget = nil   // đóng sheet NGAY — mọi thao tác đĩa chạy nền
+        Task.detached(priority: .userInitiated) {
+            try? store.move(from: from, to: to)
+            Self.moveIndexEntries(from: from.joined(separator: "/"), to: to.joined(separator: "/"), isDirectory: target.isDirectory, newName: newName)
+            Journal.shared.enqueue(.rename(from: from.joined(separator: "/"), to: to.joined(separator: "/")))
+            await MainActor.run { SyncEngine.shared.triggerSync() }
+        }
     }
 
     private func deleteEntry(_ entry: FileSystemStore.Entry, _ childPath: [String]) {
-        // FileSystemStore.remove chuyển dữ liệu + đăng ký entry "Đã xóa gần đây"
-        // (kèm snapshot index). Engine đọc snapshot từ TrashStore khi xử lý op;
-        // part trên Drive do engine trash qua op delete.
+        // FileSystemStore.remove chuyển dữ liệu vào "Đã xóa gần đây" + đăng ký
+        // TrashStore; part trên Drive do engine trash qua op delete. Chạy NỀN —
+        // xóa thư mục lớn không được chặn main.
         let p = childPath.joined(separator: "/")
-        try? store.remove(at: childPath)
-        Journal.shared.enqueue(.delete(path: p, snapshot: nil))
-        engine.triggerSync()
+        let store = self.store
+        Task.detached(priority: .userInitiated) {
+            try? store.remove(at: childPath)
+            Journal.shared.enqueue(.delete(path: p, snapshot: nil))
+            await MainActor.run { SyncEngine.shared.triggerSync() }
+        }
     }
 
-    /// Nhân đôi: copy trong cùng thư mục với tên "tên (2).ext" + đăng ký sync.
+    /// Nhân đôi: copy trong cùng thư mục với tên "tên (2).ext" + đăng ký sync. NỀN.
     private func duplicateEntry(_ entry: FileSystemStore.Entry, _ childPath: [String]) {
         guard let name = childPath.last else { return }
         var newName = name
         var n = 2
         while store.exists(at: path + [newName])
             || IndexStore.shared.node(at: (path + [newName]).joined(separator: "/")) != nil {
-            newName = uniquedCopyName(for: name, n)
+            newName = Self.uniquedCopyName(for: name, n)
             n += 1
             if n > 999 { break }
         }
         let target = path + [newName]
-        if entry.isDirectory {
-            try? store.copyDirectory(from: store.url(for: childPath), to: target)
-            registerImportedFolder(target)
-        } else {
-            try? store.copyFile(from: store.url(for: childPath), to: target)
-            registerImportedFile(target)
+        let store = self.store
+        let isDir = entry.isDirectory
+        Task.detached(priority: .userInitiated) {
+            if isDir {
+                try? store.copyDirectory(from: store.url(for: childPath), to: target)
+                Self.registerImportedFolder(target)
+            } else {
+                try? store.copyFile(from: store.url(for: childPath), to: target)
+                Self.registerImportedFile(target)
+            }
+            await MainActor.run { SyncEngine.shared.triggerSync() }
         }
-        engine.triggerSync()
     }
 
     /// Di chuyển node trong index (giữ placement — không re-upload).
@@ -767,7 +801,8 @@ struct FilesView: View {
 
     private func importPhotos(_ items: [PhotoPicker.Item]) {
         let dir = path
-        Task {
+        let store = self.store
+        Task.detached(priority: .userInitiated) {
             for item in items {
                 if let url = try? await item.loadFileURL() {
                     let name = item.suggestedName ?? url.lastPathComponent
@@ -775,27 +810,31 @@ struct FilesView: View {
                     let scoped = url.startAccessingSecurityScopedResource()
                     defer { if scoped { url.stopAccessingSecurityScopedResource() } }
                     try? store.copyFile(from: url, to: dest)
-                    registerImportedFile(dest)
+                    Self.registerImportedFile(dest)
                 }
             }
-            engine.triggerSync()
+            await MainActor.run { SyncEngine.shared.triggerSync() }
         }
     }
 
     private func importCamera(_ result: CameraResult?) {
         guard let result else { return }
-        let dest: [String]
-        switch result {
-        case let .image(image):
-            guard let data = image.jpegData(compressionQuality: 0.9) else { return }
-            dest = path + [Self.timestampName("jpg")]
-            try? store.write(data: data, to: dest)
-        case let .video(url):
-            dest = path + [Self.timestampName("mov")]
-            try? store.copyFile(from: url, to: dest)
+        let dir = path
+        let store = self.store
+        Task.detached(priority: .userInitiated) {
+            let dest: [String]
+            switch result {
+            case let .image(image):
+                guard let data = image.jpegData(compressionQuality: 0.9) else { return }
+                dest = dir + [Self.timestampName("jpg")]
+                try? store.write(data: data, to: dest)
+            case let .video(url):
+                dest = dir + [Self.timestampName("mov")]
+                try? store.copyFile(from: url, to: dest)
+            }
+            Self.registerImportedFile(dest)
+            await MainActor.run { SyncEngine.shared.triggerSync() }
         }
-        registerImportedFile(dest)
-        engine.triggerSync()
     }
 
     private static func timestampName(_ ext: String) -> String {
@@ -808,53 +847,65 @@ struct FilesView: View {
     private func importNote(name: String, text: String) {
         let fileName = name.hasSuffix(".txt") ? name : name + ".txt"
         let dest = path + [fileName]
-        try? store.write(data: Data(text.utf8), to: dest)
-        registerImportedFile(dest)
-        engine.triggerSync()
+        let store = self.store
+        Task.detached(priority: .userInitiated) {
+            try? store.write(data: Data(text.utf8), to: dest)
+            Self.registerImportedFile(dest)
+            await MainActor.run { SyncEngine.shared.triggerSync() }
+        }
     }
 
     private func importDocuments(_ urls: [URL]) {
         let dir = path
-        for url in urls {
-            let dest = dir + [url.lastPathComponent]
-            let scoped = url.startAccessingSecurityScopedResource()
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            try? store.copyFile(from: url, to: dest)
-            registerImportedFile(dest)
+        let store = self.store
+        Task.detached(priority: .userInitiated) {
+            for url in urls {
+                let dest = dir + [url.lastPathComponent]
+                let scoped = url.startAccessingSecurityScopedResource()
+                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                try? store.copyFile(from: url, to: dest)
+                Self.registerImportedFile(dest)
+            }
+            await MainActor.run { SyncEngine.shared.triggerSync() }
         }
-        engine.triggerSync()
     }
 
     /// Thư mục người dùng chọn (picker mở tại chỗ — URL gốc security-scoped):
     /// copy cả cây vào mirror trong lúc còn quyền truy cập, đăng ký index +
     /// journal theo từng cấp. KHÔNG xoá srcURL — đó là thư mục thật của người dùng.
+    /// NỀN — copy cây lớn không chặn UI.
     private func importDroppedFolder(_ srcURL: URL?) {
         guard let srcURL else { return }
-        let scoped = srcURL.startAccessingSecurityScopedResource()
-        defer { if scoped { srcURL.stopAccessingSecurityScopedResource() } }
         let dir = path
-        var name = srcURL.lastPathComponent
-        var n = 2
-        while store.exists(at: dir + [name])
-            || IndexStore.shared.node(at: (dir + [name]).joined(separator: "/")) != nil {
-            name += " (\(n))"
-            n += 1
-            if n > 999 { break }
+        let store = self.store
+        Task.detached(priority: .userInitiated) {
+            let scoped = srcURL.startAccessingSecurityScopedResource()
+            defer { if scoped { srcURL.stopAccessingSecurityScopedResource() } }
+            var name = srcURL.lastPathComponent
+            var n = 2
+            while store.exists(at: dir + [name])
+                || IndexStore.shared.node(at: (dir + [name]).joined(separator: "/")) != nil {
+                name += " (\(n))"
+                n += 1
+                if n > 999 { break }
+            }
+            let dest = dir + [name]
+            do {
+                try store.copyDirectory(from: srcURL, to: dest)
+            } catch {
+                AppLog.log("import", "❌ Không copy được thư mục \(name): \(error.localizedDescription)")
+                return
+            }
+            Self.registerImportedFolder(dest)
+            await MainActor.run { SyncEngine.shared.triggerSync() }
         }
-        let dest = dir + [name]
-        do {
-            try store.copyDirectory(from: srcURL, to: dest)
-        } catch {
-            AppLog.log("import", "❌ Không copy được thư mục \(name): \(error.localizedDescription)")
-            return
-        }
-        registerImportedFolder(dest)
-        engine.triggerSync()
     }
 
     /// Đăng ký cả cây thư mục vừa nhập (thư mục → createFolder, file → uploadFile).
-    private func registerImportedFolder(_ dirPath: [String]) {
+    /// Static — gọi từ Task.detached (chỉ chạm IndexStore/Journal, không UI).
+    private static func registerImportedFolder(_ dirPath: [String]) {
         let index = IndexStore.shared
+        let store = FileSystemStore.shared
         let fm = FileManager.default
         let dirURL = store.url(for: dirPath)
         let dirKey = dirPath.joined(separator: "/")
@@ -884,7 +935,8 @@ struct FilesView: View {
     }
 
     /// Đăng ký file vừa nhập vào index (chưa có placement → SyncEngine tự chọn account).
-    private func registerImportedFile(_ dest: [String]) {
+    private static func registerImportedFile(_ dest: [String]) {
+        let store = FileSystemStore.shared
         let size = store.fileSize(at: dest) ?? 0
         let p = dest.joined(separator: "/")
         IndexStore.shared.upsert(path: p, node: .init(
