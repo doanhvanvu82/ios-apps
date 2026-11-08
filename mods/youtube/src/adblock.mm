@@ -1,28 +1,24 @@
-// Chặn quảng cáo cho YouTube iOS 21.x (ad-slot + cell quảng cáo trong feed).
+// Chặn quảng cáo cho YouTube iOS 21.44.4.
+//
+// CÁCH CHÍNH (học từ YTLite, tweak còn bảo trì cho bản YouTube hiện tại):
+// không decorate context quảng cáo khi gửi InnerTube — server coi phiên là
+// "không monetize" nên không trả ad slot/preroll. Hook:
+//   YTAdsInnerTubeContextDecoratorImpl
+//   YTAccountScopedAdsInnerTubeContextDecorator
+// (decorateContext:serviceType:, decorateContextWithAdShieldSignals:,
+//  decorateContextWithIDFA:) — thêm hai hàm sau chặn tín hiệu IDFA/ad-shield
+// và tracking "allow ads" để server không gắn ads vào phiên.
+//
+// Chặn bổ sung ở client cho ad slot/cell đã lỡ nhận:
+//  - hàm `void` của pipeline ad: bỏ thân hàm;
+//  - getter danh sách ad → @[]; getter player-response của ad → nil.
 //
 // Nguyên tắc an toàn (đã trả giá bằng 2 lần crash):
-//  - Chỉ chặn bằng hàm `void` của pipeline ad: bỏ thân hàm.
-//  - Getter danh sách → trả @[]; getter player-response của ad → nil.
-//  - TUYỆT ĐỐI không trả nil từ hàm init/create/slotFrom… có kiểu trả object:
-//    caller dùng kết quả ngay → EXC_BAD_ACCESS tại objc_retain
+//  - TUYỆT ĐỐI không trả nil từ hàm init/create/slotFrom… trả object: caller
+//    dùng kết quả ngay → EXC_BAD_ACCESS tại objc_retain
 //    (YTSlotFactoryImpl.slotFromAdSlotMetadata:controlFlowLayer:).
-//
-// Type encoding lấy từ dump binary (đừng đoán):
-//   YTAdElementsCellAPIImpl.didLoadRenderer:                     v24@0:8@16
-//   YTAdElementsCellExternallyManagedSlotAdapterImpl
-//       .didBindSlotData:layoutData:                             v32@0:8@16@24
-//   YTBaseOpportunityAdapter.didReceiveAdSlots:adOpportunityContext: v32@0:8@16@24
-//   YTCommandDrivenExternallyManagedSlotOpportunityAdapter
-//       .didReceiveCommand:fromSender:                           v32@0:8@16@24
-//   YTAdsControlFlowManagerImpl.lifecycleDidStartForAdSlots:context: v32@0:8@16@24
-//   YTAdsControlFlowOpportunityReceivedCommandHandlerImpl
-//       .executeWithCommand:entry:fromView:sender:               v48@0:8@16@24@32@40
-//   YTAdBreakResponseReceivedOpportunityAdapterV2
-//       .didReceiveAdBreakResponse:fromAdBreakSlot:              v32@0:8@16@24
-//   YTAdClientOrganicMetadata.adSlotRenderers                    @16@0:8
-//   YTAdBreakResponseReceivedOpportunityAdapterImpl
-//       .adArrayFromPlayerBytesAdLayoutRenderer:adBreaks:        @32@0:8@16@24
-//   YTPlayerResponse.adPlayerResponse                            @16@0:8
+//  - Chỉ hook hàm có type encoding đã đối chiếu từ binary; hàm void-ify phải
+//    thật là `v…`, nếu là `@…` thì phải gọi lại gốc và trả giá trị.
 //
 // Class ad của YouTube tải lười: cài lại mỗi 2 giây (20 giây đầu) và mỗi lần
 // app về foreground.
@@ -37,125 +33,170 @@ typedef struct {
     const char *cls;
     const char *sel;
     int kind;
-    int nargs;
     IMP hook;
     IMP *orig;
     const char *label;
 } YTMAdHook;
 
-// Log lần đầu mỗi hook để log trên máy cho biết ads đi qua đường nào.
-static const char *YTMAdHookLabel(int idx);
+static int g_hitCount[32];
 
-static void ytm_ad_hit(int idx) {
-    static int hits[64];
-    if (idx < 0 || idx >= 64) return;
-    if (hits[idx] < 3) {
-        hits[idx]++;
-        YTModLog(@"ads: CHẶN %s (lần %d)", YTMAdHookLabel(idx), hits[idx]);
+static void ytm_ad_hit(int idx, const char *label) {
+    if (idx < 0 || idx >= 32) return;
+    if (g_hitCount[idx] < 3) {
+        g_hitCount[idx]++;
+        YTModLog(@"ads: CHẶN %s (lần %d)", label, g_hitCount[idx]);
     }
+}
+
+// --- TẦNG GỐC: ads context decorator ---------------------------------------
+// decorateContext:serviceType: có tham số 2 là int64 (q) — truyền bằng thanh
+// ghi 64-bit như id nên khai báo int64_t cho đúng nghĩa.
+static IMP _o_decorateContext;
+static void h_decorateContext(id s, SEL c, id ctx, int64_t serviceType) {
+    if (YTAdsOffEnabled()) { ytm_ad_hit(0, "ads ctx decorate"); return; }
+    ((void (*)(id, SEL, id, int64_t))_o_decorateContext)(s, c, ctx, serviceType);
+}
+
+static IMP _o_decorateShield;
+static void h_decorateShield(id s, SEL c, id a1) {
+    if (YTAdsOffEnabled()) { ytm_ad_hit(1, "ads ctx shield"); return; }
+    ((void (*)(id, SEL, id))_o_decorateShield)(s, c, a1);
+}
+
+static IMP _o_decorateIDFA;
+static void h_decorateIDFA(id s, SEL c, id a1) {
+    if (YTAdsOffEnabled()) { ytm_ad_hit(2, "ads ctx idfa"); return; }
+    ((void (*)(id, SEL, id))_o_decorateIDFA)(s, c, a1);
 }
 
 // --- Hàm void của pipeline ad: bỏ thân hàm ---------------------------------
 static IMP _o_executeCommand;
 static void h_executeCommand(id s, SEL c, id a1, id a2, id a3, id a4) {
-    if (YTAdsOffEnabled()) { ytm_ad_hit(0); return; }
+    if (YTAdsOffEnabled()) { ytm_ad_hit(3, "executeWithCommand"); return; }
     ((void (*)(id, SEL, id, id, id, id))_o_executeCommand)(s, c, a1, a2, a3, a4);
 }
 
 static IMP _o_receiveCommand;
 static void h_receiveCommand(id s, SEL c, id a1, id a2) {
-    if (YTAdsOffEnabled()) { ytm_ad_hit(1); return; }
+    if (YTAdsOffEnabled()) { ytm_ad_hit(4, "didReceiveCommand"); return; }
     ((void (*)(id, SEL, id, id))_o_receiveCommand)(s, c, a1, a2);
 }
 
 static IMP _o_didReceiveAdSlots;
 static void h_didReceiveAdSlots(id s, SEL c, id a1, id a2) {
-    if (YTAdsOffEnabled()) { ytm_ad_hit(2); return; }
+    if (YTAdsOffEnabled()) { ytm_ad_hit(5, "didReceiveAdSlots"); return; }
     ((void (*)(id, SEL, id, id))_o_didReceiveAdSlots)(s, c, a1, a2);
 }
 
 static IMP _o_lifecycleAdSlots;
 static void h_lifecycleAdSlots(id s, SEL c, id a1, id a2) {
-    if (YTAdsOffEnabled()) { ytm_ad_hit(3); return; }
+    if (YTAdsOffEnabled()) { ytm_ad_hit(6, "lifecycleDidStartForAdSlots"); return; }
     ((void (*)(id, SEL, id, id))_o_lifecycleAdSlots)(s, c, a1, a2);
 }
 
 static IMP _o_v2DidReceive;
 static void h_v2DidReceive(id s, SEL c, id a1, id a2) {
-    if (YTAdsOffEnabled()) { ytm_ad_hit(4); return; }
+    if (YTAdsOffEnabled()) { ytm_ad_hit(7, "didReceiveAdBreakResponse V2"); return; }
     ((void (*)(id, SEL, id, id))_o_v2DidReceive)(s, c, a1, a2);
 }
 
 // Cell quảng cáo trong feed/trang: không nạp renderer, không bind slot.
 static IMP _o_cellDidLoad;
 static void h_cellDidLoad(id s, SEL c, id a1) {
-    if (YTAdsOffEnabled()) { ytm_ad_hit(5); return; }
+    if (YTAdsOffEnabled()) { ytm_ad_hit(8, "ad cell didLoadRenderer"); return; }
     ((void (*)(id, SEL, id))_o_cellDidLoad)(s, c, a1);
 }
 
 static IMP _o_cellBindSlot;
 static void h_cellBindSlot(id s, SEL c, id a1, id a2) {
-    if (YTAdsOffEnabled()) { ytm_ad_hit(6); return; }
+    if (YTAdsOffEnabled()) { ytm_ad_hit(9, "ad cell didBindSlotData"); return; }
     ((void (*)(id, SEL, id, id))_o_cellBindSlot)(s, c, a1, a2);
 }
 
 // --- Getter danh sách ad → rỗng --------------------------------------------
 static IMP _o_adSlotRenderers;
 static id h_adSlotRenderers(id s, SEL c) {
-    if (YTAdsOffEnabled()) { ytm_ad_hit(7); return @[]; }
+    if (YTAdsOffEnabled()) { ytm_ad_hit(10, "adSlotRenderers=[]"); return @[]; }
     return ((id (*)(id, SEL))_o_adSlotRenderers)(s, c);
 }
 
 static IMP _o_adArrayFromLayout;
 static id h_adArrayFromLayout(id s, SEL c, id a1, id a2) {
-    if (YTAdsOffEnabled()) { ytm_ad_hit(8); return @[]; }
+    if (YTAdsOffEnabled()) { ytm_ad_hit(11, "adArray=[]"); return @[]; }
     return ((id (*)(id, SEL, id, id))_o_adArrayFromLayout)(s, c, a1, a2);
 }
 
 // --- Getter player response của ad → nil -----------------------------------
 static IMP _o_adPlayerResponse;
 static id h_adPlayerResponse(id s, SEL c) {
-    if (YTAdsOffEnabled()) { ytm_ad_hit(9); return nil; }
+    if (YTAdsOffEnabled()) { ytm_ad_hit(12, "adPlayerResponse=nil"); return nil; }
     return ((id (*)(id, SEL))_o_adPlayerResponse)(s, c);
 }
 
-#define ADHOOK(CLS, SEL, KIND, NARGS, FN, ORIG, LABEL) \
-    { CLS, SEL, KIND, NARGS, (IMP)FN, &ORIG, LABEL }
+static IMP _o_decorateContextAcct;
+static void h_decorateContextAcct(id s, SEL c, id ctx, int64_t serviceType) {
+    if (YTAdsOffEnabled()) { ytm_ad_hit(13, "account ads ctx decorate"); return; }
+    ((void (*)(id, SEL, id, int64_t))_o_decorateContextAcct)(s, c, ctx, serviceType);
+}
 
+static IMP _o_decorateShieldAcct;
+static void h_decorateShieldAcct(id s, SEL c, id a1) {
+    if (YTAdsOffEnabled()) { ytm_ad_hit(14, "account ads ctx shield"); return; }
+    ((void (*)(id, SEL, id))_o_decorateShieldAcct)(s, c, a1);
+}
+
+static IMP _o_decorateIDFAAcct;
+static void h_decorateIDFAAcct(id s, SEL c, id a1) {
+    if (YTAdsOffEnabled()) { ytm_ad_hit(15, "account ads ctx idfa"); return; }
+    ((void (*)(id, SEL, id))_o_decorateIDFAAcct)(s, c, a1);
+}
+
+#define ADHOOK(CLS, SEL, KIND, FN, ORIG, LABEL) \
+    { CLS, SEL, KIND, (IMP)FN, &ORIG, LABEL }
+
+// Hook theo tên class cố định. Decorator được hook động (xem dưới) vì 21.44.4
+// có nhiều lớp generated impl kế thừa.
 static const YTMAdHook YTM_AD_HOOKS[] = {
+    ADHOOK("YTAdsInnerTubeContextDecoratorImpl", "decorateContext:serviceType:",
+           YTMAdSkip, h_decorateContext, _o_decorateContext, "ads ctx decorate"),
+    ADHOOK("YTAdsInnerTubeContextDecoratorImpl", "decorateContextWithAdShieldSignals:",
+           YTMAdSkip, h_decorateShield, _o_decorateShield, "ads ctx shield"),
+    ADHOOK("YTAdsInnerTubeContextDecoratorImpl", "decorateContextWithIDFA:",
+           YTMAdSkip, h_decorateIDFA, _o_decorateIDFA, "ads ctx idfa"),
+    ADHOOK("YTAccountScopedAdsInnerTubeContextDecorator", "decorateContext:serviceType:",
+           YTMAdSkip, h_decorateContextAcct, _o_decorateContextAcct, "account ads ctx decorate"),
+    ADHOOK("YTAccountScopedAdsInnerTubeContextDecorator", "decorateContextWithAdShieldSignals:",
+           YTMAdSkip, h_decorateShieldAcct, _o_decorateShieldAcct, "account ads ctx shield"),
+    ADHOOK("YTAccountScopedAdsInnerTubeContextDecorator", "decorateContextWithIDFA:",
+           YTMAdSkip, h_decorateIDFAAcct, _o_decorateIDFAAcct, "account ads ctx idfa"),
     ADHOOK("YTAdsControlFlowOpportunityReceivedCommandHandlerImpl",
-           "executeWithCommand:entry:fromView:sender:", YTMAdSkip, 4,
+           "executeWithCommand:entry:fromView:sender:", YTMAdSkip,
            h_executeCommand, _o_executeCommand, "executeWithCommand"),
     ADHOOK("YTCommandDrivenExternallyManagedSlotOpportunityAdapter",
-           "didReceiveCommand:fromSender:", YTMAdSkip, 2,
+           "didReceiveCommand:fromSender:", YTMAdSkip,
            h_receiveCommand, _o_receiveCommand, "didReceiveCommand"),
     ADHOOK("YTBaseOpportunityAdapter", "didReceiveAdSlots:adOpportunityContext:",
-           YTMAdSkip, 2, h_didReceiveAdSlots, _o_didReceiveAdSlots, "didReceiveAdSlots"),
+           YTMAdSkip, h_didReceiveAdSlots, _o_didReceiveAdSlots, "didReceiveAdSlots"),
     ADHOOK("YTAdsControlFlowManagerImpl", "lifecycleDidStartForAdSlots:context:",
-           YTMAdSkip, 2, h_lifecycleAdSlots, _o_lifecycleAdSlots, "lifecycleDidStartForAdSlots"),
+           YTMAdSkip, h_lifecycleAdSlots, _o_lifecycleAdSlots, "lifecycleDidStartForAdSlots"),
     ADHOOK("YTAdBreakResponseReceivedOpportunityAdapterV2",
-           "didReceiveAdBreakResponse:fromAdBreakSlot:", YTMAdSkip, 2,
+           "didReceiveAdBreakResponse:fromAdBreakSlot:", YTMAdSkip,
            h_v2DidReceive, _o_v2DidReceive, "didReceiveAdBreakResponse V2"),
-    ADHOOK("YTAdElementsCellAPIImpl", "didLoadRenderer:", YTMAdSkip, 1,
+    ADHOOK("YTAdElementsCellAPIImpl", "didLoadRenderer:", YTMAdSkip,
            h_cellDidLoad, _o_cellDidLoad, "ad cell didLoadRenderer"),
     ADHOOK("YTAdElementsCellExternallyManagedSlotAdapterImpl",
-           "didBindSlotData:layoutData:", YTMAdSkip, 2,
+           "didBindSlotData:layoutData:", YTMAdSkip,
            h_cellBindSlot, _o_cellBindSlot, "ad cell didBindSlotData"),
-    ADHOOK("YTAdClientOrganicMetadata", "adSlotRenderers", YTMAdEmptyArray, 0,
+    ADHOOK("YTAdClientOrganicMetadata", "adSlotRenderers", YTMAdEmptyArray,
            h_adSlotRenderers, _o_adSlotRenderers, "adSlotRenderers=[]"),
     ADHOOK("YTAdBreakResponseReceivedOpportunityAdapterImpl",
-           "adArrayFromPlayerBytesAdLayoutRenderer:adBreaks:", YTMAdEmptyArray, 2,
+           "adArrayFromPlayerBytesAdLayoutRenderer:adBreaks:", YTMAdEmptyArray,
            h_adArrayFromLayout, _o_adArrayFromLayout, "adArray=[]"),
-    ADHOOK("YTPlayerResponse", "adPlayerResponse", YTMAdNil, 0,
+    ADHOOK("YTPlayerResponse", "adPlayerResponse", YTMAdNil,
            h_adPlayerResponse, _o_adPlayerResponse, "adPlayerResponse=nil"),
 };
 
 #define YTM_AD_HOOK_COUNT ((int)(sizeof(YTM_AD_HOOKS) / sizeof(YTM_AD_HOOKS[0])))
-
-static const char *YTMAdHookLabel(int idx) {
-    if (idx < 0 || idx >= YTM_AD_HOOK_COUNT) return "?";
-    return YTM_AD_HOOKS[idx].label;
-}
 
 static BOOL g_adDone[YTM_AD_HOOK_COUNT];
 
@@ -177,6 +218,7 @@ static int ytm_ad_install_pass(BOOL verbose) {
         done++;
         if (verbose) YTModLog(@"ads OK  %s", h->label);
     }
+    done += 0;
     return done;
 }
 
@@ -185,16 +227,12 @@ void YTAdBlockInstall(void) {
     dispatch_once(&once, ^{
         YTAdsOffEnabled(); // nạp công tắc
         int n = ytm_ad_install_pass(YES);
-        YTModLog(@"ads: %d/%d hook ngay (module còn lại cài sau)", n, YTM_AD_HOOK_COUNT);
+        YTModLog(@"ads: %d hook ngay (module còn lại cài sau)", n);
         // Module ad của YouTube tải lười sau khi có player/feed → thử lại vài mốc.
         for (double t = 2.0; t <= 20.0; t += 2.0) {
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(t * NSEC_PER_SEC)),
                            dispatch_get_main_queue(), ^{
-                int c = 0;
-                for (int i = 0; i < YTM_AD_HOOK_COUNT; i++) c += g_adDone[i];
-                if (c >= YTM_AD_HOOK_COUNT) return;
-                int now = ytm_ad_install_pass(NO);
-                if (now != c) YTModLog(@"ads: %d/%d hook sau %.0fs", now, YTM_AD_HOOK_COUNT, t);
+                ytm_ad_install_pass(NO);
             });
         }
     });

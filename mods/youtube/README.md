@@ -2,19 +2,20 @@
 
 Tiêm dylib ObjC++ vào IPA YouTube **đã giải mã** (bản dump từ thiết bị), bật:
 
-- **Chặn quảng cáo**: trả `NO` cho các cờ monetized/preroll của `YTIPlayerResponse`,
-  chặn `YTAdBreakServiceImpl` request ad, và chặn ở tầng **ad-slot** (nơi iOS 21.x
-  thực sự dựng quảng cáo). `adblock.mm` chỉ hook **điểm an toàn**: hàm `void`
-  của pipeline (`executeWithCommand:`, `didReceiveCommand:`, `didReceiveAdSlots:`,
-  `lifecycleDidStartForAdSlots:`, `didReceiveAdBreakResponse:`) bỏ thân hàm;
-  getter danh sách (`adSlotRenderers`, `adArrayFromPlayerBytesAdLayoutRenderer:adBreaks:`)
-  trả `[]`; `adPlayerResponse` trả nil. Các class ad thuộc module tải lười nên
-  thử cài lại mỗi 2 giây trong 20 giây đầu và mỗi lần app về foreground
-  (log `ads: OK`).
-  **Bẫy**: KHÔNG trả nil từ hàm `init`/`create` của pipeline ad
-  (`YTAdSlot initWithSlotID…`, `createSlotFromAdSlotRenderer:`) — caller gốc dùng
-  kết quả ngay → crash `EXC_BAD_ACCESS` tại `objc_retain`
-  (`YTSlotFactoryImpl.slotFromAdSlotMetadata:controlFlowLayer:`).
+- **Chặn quảng cáo**: theo cách YTLite — **không decorate context quảng cáo khi
+  gửi InnerTube** (`YTAdsInnerTubeContextDecoratorImpl` và
+  `YTAccountScopedAdsInnerTubeContextDecorator`: `decorateContext:serviceType:`,
+  `decorateContextWithAdShieldSignals:`, `decorateContextWithIDFA:`) để server
+  không trả ad slot/preroll. Chặn bổ sung phía client cho slot/cell đã lỡ nhận:
+  hàm `void` của pipeline (`executeWithCommand:`, `didReceiveCommand:`,
+  `didReceiveAdSlots:`, `lifecycleDidStartForAdSlots:`,
+  `didReceiveAdBreakResponse:`) và cell feed (`didLoadRenderer:`,
+  `didBindSlotData:layoutData:`) bỏ thân hàm; getter danh sách trả `[]`;
+  `adPlayerResponse` trả nil. Các class ad tải lười nên thử cài lại mỗi 2 giây
+  (20 giây đầu) và mỗi lần về foreground (log `ads: OK`, `ads: CHẶN`).
+  **Bẫy**: không trả nil từ hàm `init`/`create`/`slotFrom…` trả object
+  (`YTAdSlot initWithSlotID…`, `YTSlotFactoryImpl.slotFromAdSlotMetadata…`) —
+  caller dùng ngay → `EXC_BAD_ACCESS` tại `objc_retain`.
 - **Menu YT**: hiện `YT <phiên bản app> · mod <MOD_VERSION>` và `build <nhãn giờ>`
   để biết đang chạy bản mới hay cũ (version app luôn là `21.44.4`).
 - **Phát nền / PiP**: ép `isBackgroundableByUserSettings` /
