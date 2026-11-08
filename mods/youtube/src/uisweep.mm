@@ -243,13 +243,18 @@ void YTUISweepInstall(void) {
         }
         g_hiddenCells = [NSMutableArray new];
         g_hiddenIndexPaths = [NSMutableArray new];
-        Class layoutCls = objc_getClass("UICollectionViewLayout");
+        // Hook layout CON thật: ASCollectionLayout (layout của ASCollectionView
+        // ASDK — feed dùng nó). Hook trên UICollectionViewLayout lớp cha KHÔNG bị
+        // gọi vì subclass tự implement (log 3.20: hook OK nhưng 0 lượt ép).
+        Class layoutCls = objc_getClass("ASCollectionLayout");
+        if (!layoutCls) layoutCls = objc_getClass("UICollectionViewLayout");
         Method lm = class_getInstanceMethod(layoutCls, sel_registerName("layoutAttributesForElementsInRect:"));
         if (lm) {
             _o_layoutAttrsInRect = method_getImplementation(lm);
             class_replaceMethod(layoutCls, sel_registerName("layoutAttributesForElementsInRect:"),
                                 (IMP)h_layoutAttrsInRect, method_getTypeEncoding(lm));
-            YTModLog(@"uisweep: hook layoutAttributes OK");
+            YTModLog(@"uisweep: hook layoutAttributes OK (%s)",
+                     class_getName(layoutCls));
         }
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
