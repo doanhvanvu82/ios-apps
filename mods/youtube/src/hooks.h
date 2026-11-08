@@ -68,6 +68,12 @@ void YTProbeInstall(void);
 // Tự bật PiP khi app rời foreground (chỉ khi bật công tắc PiP).
 void YTAutoPiPInstall(void);
 
+// Quét UI ẩn cell quảng cáo theo nhãn "Được tài trợ" (cổng UI cuối cùng).
+void YTUISweepInstall(void);
+
+// Quét UI ẩn cell quảng cáo theo nhãn "Được tài trợ" (cổng UI cuối cùng).
+void YTUISweepInstall(void);
+
 #ifdef __cplusplus
 }
 #endif
