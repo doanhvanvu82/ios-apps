@@ -127,15 +127,15 @@
       "versionDate": "2026-11-08",
       "versionDescription": "Build 21.44.4",
       "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/YouTube-21.44.4.ipa",
-      "size": 135355673,
+      "size": 135355196,
       "versions": [
         {
           "version": "21.44.4",
           "buildVersion": "21.44.4",
-          "date": "2026-11-08T10:59:08+00:00",
+          "date": "2026-11-08T11:08:06+00:00",
           "localizedDescription": "Build 21.44.4",
           "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/YouTube-21.44.4.ipa",
-          "size": 135355673
+          "size": 135355196
         }
       ],
       "appPermissions": {
