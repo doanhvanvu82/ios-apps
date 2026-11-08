@@ -188,6 +188,36 @@ static id h_tabContents(id s, SEL c) {
     return ytm_filter(v);
 }
 
+// --- TẦNG 1: xóa sạch dữ liệu element quảng cáo ngay khi render xin ----------
+// Log 2.3: 2.2/2.3 đã hook đúng 2 lớp sizeForCellController (cả lớp cha lẫn
+// YTFeedSectionController) nhưng 0 lượt gọi — element không qua đường đó.
+// Cùng lúc probe (hook YTIElementRenderer.elementData) BẮT ĐƯỢC element quảng
+// cáo đầy đủ → đây là cổng duy nhất chắc chắn đi qua. Trả một elementData rỗng
+// (YTIElementRenderer fresh, không có renderer nào bên trong): builder không có
+// gì để dựng cell, element bị bỏ qua hoàn toàn (đây là cách chặn gốc của
+// YTLite/Spoof các bản mới).
+static IMP _o_elData;
+static id h_elData(id s, SEL c) {
+    id v = ((id (*)(id, SEL))_o_elData)(s, c);
+    if (!YTAdsOffEnabled()) return v;
+    @try {
+        if (v) {
+            NSString *desc = [v description] ?: @"";
+            if (ytm_desc_is_ad(desc)) {
+                static int logged = 0;
+                if (logged < 20) {
+                    logged++;
+                    YTModLog(@"eldata: XÓA dữ liệu element quảng cáo %@", s);
+                }
+                // Trả một YTIElementRenderer rỗng cùng class: không có renderer
+                // con, builder không dựng cell, element bị bỏ qua.
+                return [[objc_getClass("YTIElementRenderer") alloc] init];
+            }
+        }
+    } @catch (__unused NSException *e) {}
+    return v;
+}
+
 // --- TẦNG CUỐI: nén cell quảng cáo ở section controller ---------------------
 // Log 2.1: ad trang chủ là element thường có `ad_logging_data` → không có class
 // "Promoted*" riêng để chặn tên. Mọi entry của section đều đi qua
@@ -268,17 +298,18 @@ static BOOL ytm_install_one(const char *clsName, const char *selName, IMP hook, 
 void YTSectionFilterInstall(void) {
     // Chỉ cài mỗi hook 1 lần: cài đè lên chính mình sẽ khiến *orig trỏ vào hook
     // của mình → đệ quy vô hạn.
-    static BOOL done[6];
+    static BOOL done[7];
     int n = 0;
-    struct { const char *cls; const char *sel; IMP hook; IMP *orig; const char *label; } all[6] = {
+    struct { const char *cls; const char *sel; IMP hook; IMP *orig; const char *label; } all[7] = {
         {"YTISectionListRenderer", "sectionRenderers", (IMP)h_sectionRenderers, &_o_sectionRenderers, "feed"},
         {"YTIWatchNextResponse", "sectionRenderers", (IMP)h_wnSectionRenderers, &_o_wnSectionRenderers, "watch"},
         {"ELMPBFeedData", "contents", (IMP)h_feedContents, &_o_feedContents, "elm"},
         {"YTIElementTabRenderer", "contentsArray", (IMP)h_tabContents, &_o_tabContents, "tab"},
+        {"YTIElementRenderer", "elementData", (IMP)h_elData, &_o_elData, "eldata"},
         {"YTSectionController", "sizeForCellController:withSize:", (IMP)h_sizeForCell, &_o_sizeForCell, "size"},
         {"YTFeedSectionController", "sizeForCellController:withSize:", (IMP)h_sizeForFeed, &_o_sizeForFeed, "feedsize"},
     };
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 7; i++) {
         if (done[i]) { n++; continue; }
         if (ytm_install_one(all[i].cls, all[i].sel, all[i].hook, all[i].orig, all[i].label)) {
             done[i] = YES;
