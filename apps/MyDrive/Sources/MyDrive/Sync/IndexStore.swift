@@ -37,6 +37,17 @@ final class IndexStore: ObservableObject {
     private let saveQueue = DispatchQueue(label: "vn.vudv.mydrive.index.save")
     private var pendingPersist: Persisted?
     private var persistScheduled = false
+    /// KHÓA bảo vệ dictionary `index`: 6 worker song song (1.87) cùng mutate →
+    /// data race trên Dictionary Swift không khóa = crash (EXC_BAD_ACCESS, đã
+    /// gặp thật 08/11 khi đẩy 700 file). Mọi đọc/ghi dictionary phải qua lock.
+    private let dictLock = NSLock()
+
+    /// Đọc snapshot an toàn trong lock.
+    private func withDict<T>(_ body: (inout [String: IndexNode]) -> T) -> T {
+        dictLock.lock()
+        defer { dictLock.unlock() }
+        return body(&index)
+    }
 
     private init() {
         _ = AppPaths.migrated
@@ -55,6 +66,7 @@ final class IndexStore: ObservableObject {
         needsPush = false
     }
 
+
     private struct Persisted: Codable {
         var nodes: [String: IndexNode]
         var rev: Int
@@ -65,7 +77,7 @@ final class IndexStore: ObservableObject {
     /// trăm lần liên tiếp (đổi tên thư mục nhiều file) không chặn main thread
     /// và chỉ ghi đĩa ~1 lần/0,2 giây (các lần sau gom chung).
     func save() {
-        let state = Persisted(nodes: index, rev: rev)
+        let state = withDict { Persisted(nodes: $0, rev: rev) }
         saveQueue.async { [weak self] in
             guard let self else { return }
             self.pendingPersist = state
@@ -85,7 +97,7 @@ final class IndexStore: ObservableObject {
 
     /// Ghi ngay (dùng khi app sắp vào nền — đảm bảo mọi thay đổi đã xuống đĩa).
     func saveNow() {
-        let state = Persisted(nodes: index, rev: rev)
+        let state = withDict { Persisted(nodes: $0, rev: rev) }
         try? FileManager.default.createDirectory(at: metaDir, withIntermediateDirectories: true)
         if let data = try? JSONEncoder().encode(state) {
             try? data.write(to: fileURL, options: .atomic)
@@ -95,14 +107,16 @@ final class IndexStore: ObservableObject {
 
     /// Snapshot (dùng khi mirror lên Drive).
     func snapshot() -> (nodes: [String: IndexNode], rev: Int) {
-        (index, rev)
+        withDict { ($0, rev) }
     }
 
     /// Nạp index (khôi phục sau cài lại).
     func replaceAll(nodes: [String: IndexNode], rev: Int) {
+        dictLock.lock()
         index = nodes
         self.rev = rev
         needsPush = false
+        dictLock.unlock()
         save()
     }
 
@@ -114,44 +128,59 @@ final class IndexStore: ObservableObject {
 
     /// Ghi node mới/cập nhật node (bump rev).
     func upsert(path: String, node: IndexNode) {
+        dictLock.lock()
         index[path] = node
         rev += 1
+        dictLock.unlock()
         save()
     }
 
     func remove(path: String) {
+        dictLock.lock()
         index.removeValue(forKey: path)
         rev += 1
+        dictLock.unlock()
         save()
     }
 
     /// Xoá cả cây (di chuyển/thuộc thư mục bị xoá).
     func removeTree(prefix: String) {
+        dictLock.lock()
         let p = prefix + "/"
         for key in index.keys where key.hasPrefix(p) {
             index.removeValue(forKey: key)
         }
         rev += 1
+        dictLock.unlock()
         save()
     }
 
     func node(at path: String) -> IndexNode? {
-        index[path]
+        dictLock.lock()
+        defer { dictLock.unlock() }
+        return index[path]
     }
 
     /// Tìm node file có cùng inode-ish: file đổi tên → path cũ bị remove, path mới upsert.
     /// Dùng để giữ driveFileId khi rename (SyncEngine xử lý).
     func allNodes() -> [(path: String, node: IndexNode)] {
-        index.map { ($0.key, $0.value) }.sorted { $0.0 < $1.0 }
+        dictLock.lock()
+        defer { dictLock.unlock() }
+        return index.map { ($0.key, $0.value) }.sorted { $0.0 < $1.0 }
     }
 
     /// Cập nhật node giữ nguyên path (không bump rev — dùng khi sync engine
     /// cập nhật driveFileId sau khi upload; rev chỉ tăng khi nội dung người dùng thay đổi).
     func update(path: String, _ mutate: (inout IndexNode) -> Void) {
-        guard var n = index[path] else { return }
-        mutate(&n)
-        index[path] = n
-        save()
+        var changed = false
+        dictLock.lock()
+        if var n = index[path] {
+            mutate(&n)
+            index[path] = n
+            changed = true
+        }
+        dictLock.unlock()
+        if changed { save() }
     }
 
     /// Đọc + mutate node nếu tồn tại (dùng cho callback nền — cùng ngữ nghĩa update).
@@ -160,7 +189,11 @@ final class IndexStore: ObservableObject {
     }
 
     /// Toàn bộ keys.
-    var keys: [String] { Array(index.keys) }
+    var keys: [String] {
+        dictLock.lock()
+        defer { dictLock.unlock() }
+        return Array(index.keys)
+    }
 
     // MARK: - Merge khi khôi phục
 
