@@ -724,15 +724,20 @@ final class SyncEngine: ObservableObject {
             return
         }
 
+        AppLog.log("sync", "ℹ️ Index + mirror đều trống — tìm index.json trên Drive…")
         var best: (payload: IndexPayload, email: String)?
         for (email, rootID) in rootIDs {
             guard let client = accounts.client(for: email) else { continue }
             do {
-                guard let indexFile = try await client.find(named: IndexStore.indexFileName, in: rootID) else { continue }
+                guard let indexFile = try await client.find(named: IndexStore.indexFileName, in: rootID) else {
+                    AppLog.log("sync", "ℹ️ \(email): không có index.json trên Drive")
+                    continue
+                }
                 let data = try await client.download(id: indexFile.id)
                 let dec = JSONDecoder()
                 dec.dateDecodingStrategy = .iso8601
                 let payload = try dec.decode(IndexPayload.self, from: data)
+                AppLog.log("sync", "ℹ️ \(email): index.json có \(payload.nodes.count) node (rev \(payload.rev), \(ByteFmt.string(Int64(data.count))))")
                 if best == nil || payload.rev > best!.payload.rev {
                     best = (payload, email)
                 }
@@ -742,8 +747,12 @@ final class SyncEngine: ObservableObject {
         }
 
         if let best {
-            _ = index.mergeRemote(nodes: best.payload.nodes, remoteRev: best.payload.rev)
-            AppLog.log("sync", "✅ Khôi phục index (rev \(best.payload.rev)) từ \(best.email) — \(best.payload.nodes.count) node")
+            let merged = index.mergeRemote(nodes: best.payload.nodes, remoteRev: best.payload.rev)
+            if merged {
+                AppLog.log("sync", "✅ Khôi phục index (rev \(best.payload.rev)) từ \(best.email) — \(best.payload.nodes.count) node")
+            } else {
+                AppLog.log("sync", "ℹ️ Bỏ qua index trên Drive (rev không cao hơn local)")
+            }
             return
         }
 
