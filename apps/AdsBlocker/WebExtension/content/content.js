@@ -320,9 +320,9 @@
     const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
     if (DEBUG) console.log("[AdsBlocker]", msg);
   };
-  // Log quan trọng gửi về native (chỉ overlayAt, removeOverlay, guard)
+  // Log quan trọng gửi về background rồi gọi native
   const logNative = (category, text) => {
-    try { browser.runtime.sendNativeMessage("application.id", { action: "log", category, text }); } catch {}
+    try { browser.runtime.sendMessage({ type: "extLog", category, text }); } catch {}
   };
   for (const type of ["pointerdown", "touchstart", "mousedown", "click"]) {
     const cancelClick = type === "click";

@@ -910,6 +910,13 @@ async function handle(message, sender) {
       await setBadge(tabId, state);
       return null;
     }
+    case "extLog": {
+      // Gửi log từ content script về native để lưu file
+      try {
+        await browser.runtime.sendNativeMessage("application.id", { action: "log", category: message.category, text: message.text });
+      } catch {}
+      return null;
+    }
     case "getTabState": return getTabState(message.tabId, message.url);
     case "scan": return startScan(message.tabId);
     case "dismissScan":
