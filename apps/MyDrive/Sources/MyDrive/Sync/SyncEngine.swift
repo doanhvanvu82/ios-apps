@@ -398,8 +398,11 @@ final class SyncEngine: ObservableObject {
                 parentID = try await client.ensureFolderPath(folderPath, under: try await client.ensureRootFolder().id).id
             }
 
+            // appProperties TỐI ĐA 124 bytes (key+value, UTF-8) — KHÔNG chứa path
+            // (path dài/Unicode vọt limit → Drive 403 propertyLengthLimitExceeded,
+            // op kẹt lặp vô hạn). Path logic khi dựng lại index được suy từ CÂY
+            // FOLDER trên Drive (part nằm đúng thư mục logic) + tên part.
             let props = [
-                "mydFileId": path,                       // path logic — khôi phục được
                 "mydPartIndex": "\(part.index)",
                 "mydRev": "\(index.node(at: path)?.rev ?? 1)",
             ]
@@ -678,33 +681,40 @@ final class SyncEngine: ObservableObject {
         await rebuildIndexFromDrive(rootIDs: rootIDs)
     }
 
-    /// Dựng index từ appProperties của part trên Drive (khi mất index.json).
-    /// Part mang mydFileId = path logic; ghép các part cùng path thành file logic.
+    /// Dựng index từ Drive khi mất index.json. appProperties chỉ mang
+    /// mydPartIndex/mydRev — path logic được SUY từ cấu trúc folder:
+    /// MyDrive/<cây thư mục logic>/<tên>.myd-part-XXXX (remoteName của part
+    /// là tên file gốc + đuôi part, gỡ đuôi ra được tên file gốc).
     private func rebuildIndexFromDrive(rootIDs: [String: String]) async {
         var nodes: [String: IndexNode] = [:]
 
         for (email, rootID) in rootIDs {
             guard let client = accounts.client(for: email) else { continue }
             do {
-                let children = try await Self.listAllDescendants(client: client, folderID: rootID)
-                for f in children {
-                    guard let props = f.appProperties, let filePath = props["mydFileId"] else { continue }
-                    // Part của 1 file logic.
-                    var node = nodes[filePath] ?? IndexNode(
-                        name: filePath.components.last ?? f.name,
-                        isDirectory: false, size: 0, modified: f.modifiedTime,
+                let children = try await Self.listAllDescendants(client: client, folderID: rootID, currentPath: [])
+                for (relPath, f) in children {
+                    guard !f.isFolder else { continue }
+                    let props = f.appProperties ?? [:]
+                    let partIndex = Int(props["mydPartIndex"] ?? "0") ?? 0
+                    // Gỡ đuôi part nếu có — còn lại là tên file logic gốc.
+                    let suffix = ".myd-part-\(String(format: "%04d", partIndex))"
+                    let fileName = f.name.hasSuffix(suffix) ? String(f.name.dropLast(suffix.count)) : f.name
+                    let path = (relPath + [fileName]).joined(separator: "/")
+                    guard !path.isEmpty else { continue }
+
+                    var node = nodes[path] ?? IndexNode(
+                        name: fileName, isDirectory: false, size: 0, modified: f.modifiedTime,
                         parts: [], rev: Int(props["mydRev"] ?? "1") ?? 1, driveFolderId: nil
                     )
                     var parts = node.parts ?? []
-                    let partIndex = Int(props["mydPartIndex"] ?? "0") ?? 0
                     parts.append(FilePart(
                         index: partIndex, size: f.sizeBytes, accountEmail: email,
                         driveFileId: f.id,
-                        remoteName: Chunker.partName(fileName: filePath.components.last ?? f.name, index: partIndex)
+                        remoteName: Chunker.partName(fileName: fileName, index: partIndex)
                     ))
                     parts.sort { $0.index < $1.index }
                     node.parts = parts
-                    nodes[filePath] = node
+                    nodes[path] = node
                 }
             } catch {
                 AppLog.log("sync", "⚠️ Dựng index từ \(email) lỗi: \(error.localizedDescription)")
@@ -720,16 +730,16 @@ final class SyncEngine: ObservableObject {
         AppLog.log("sync", "✅ Đã dựng lại index từ Drive — \(nodes.count) file (rev \(maxRev))")
     }
 
-    /// Quét đệ quy 1 folder trên Drive.
-    private static func listAllDescendants(client: DriveClient, folderID: String) async throws -> [DriveFile] {
-        var out: [DriveFile] = []
+    /// Quét đệ quy 1 folder trên Drive — trả (relativePath components, file/folder).
+    private static func listAllDescendants(client: DriveClient, folderID: String, currentPath: [String]) async throws -> [([String], DriveFile)] {
+        var out: [([String], DriveFile)] = []
         let children = try await client.listChildren(folderID: folderID)
         for child in children {
             if child.isFolder {
-                out.append(child)
-                out.append(contentsOf: try await listAllDescendants(client: client, folderID: child.id))
+                out.append((currentPath + [child.name], child))
+                out.append(contentsOf: try await listAllDescendants(client: client, folderID: child.id, currentPath: currentPath + [child.name]))
             } else {
-                out.append(child)
+                out.append((currentPath, child))
             }
         }
         return out
