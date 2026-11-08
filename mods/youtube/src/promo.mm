@@ -43,10 +43,13 @@ static YTMCellSizeHook g_cells[YTM_CELL_COUNT];
 static int g_cellCount = 0;
 
 static IMP ytm_cell_orig_for(Class cls, BOOL insets) {
-    for (int i = 0; i < g_cellCount; i++) {
-        if (!g_cells[i].cls) continue;
-        if (objc_getClass(g_cells[i].cls) != cls) continue;
-        return insets ? g_cells[i].origInsets : g_cells[i].origSize;
+    for (Class c = cls; c; c = class_getSuperclass(c)) {
+        for (int i = 0; i < g_cellCount; i++) {
+            if (!g_cells[i].cls) continue;
+            if (objc_getClass(g_cells[i].cls) != c) continue;
+            IMP o = insets ? g_cells[i].origInsets : g_cells[i].origSize;
+            if (o) return o;
+        }
     }
     return NULL;
 }
@@ -65,6 +68,19 @@ static CGSize h_cellSizeInsets(id self, SEL _cmd, CGSize size, UIEdgeInsets inse
     return ((CGSize (*)(id, SEL, CGSize, UIEdgeInsets))o)(self, _cmd, size, insets);
 }
 
+// Chỉ hook lớp tự định nghĩa method (không lấy method thừa kế từ lớp cha đã
+// hook → tránh orig trỏ lại chính hook của mình).
+static Method ytm_own_method(Class cls, SEL sel) {
+    unsigned int n = 0;
+    Method *list = class_copyMethodList(cls, &n);
+    Method found = NULL;
+    for (unsigned int i = 0; i < n; i++) {
+        if (method_getName(list[i]) == sel) { found = list[i]; break; }
+    }
+    free(list);
+    return found;
+}
+
 static void ytm_hook_cells(void) {
     for (int i = 0; i < YTM_CELL_COUNT; i++) {
         Class cls = objc_getClass(YTM_CELL_CLASSES[i]);
@@ -75,25 +91,23 @@ static void ytm_hook_cells(void) {
         }
         if (already) continue;
         if (g_cellCount >= YTM_CELL_COUNT) break;
+        Method m = ytm_own_method(cls, sel_registerName("cellSizeWithSize:"));
+        Method mi = ytm_own_method(cls, sel_registerName("cellSizeWithSize:safeAreaInsets:"));
+        if (!m && !mi) continue;
         g_cells[g_cellCount].cls = YTM_CELL_CLASSES[i];
         g_cells[g_cellCount].origSize = NULL;
         g_cells[g_cellCount].origInsets = NULL;
-        Method m = class_getInstanceMethod(cls, sel_registerName("cellSizeWithSize:"));
         if (m) {
             g_cells[g_cellCount].origSize = method_getImplementation(m);
-            class_replaceMethod(cls, sel_registerName("cellSizeWithSize:"),
-                                (IMP)h_cellSize, method_getTypeEncoding(m));
+            class_replaceMethod(cls, method_getName(m), (IMP)h_cellSize, method_getTypeEncoding(m));
         }
-        Method mi = class_getInstanceMethod(cls, sel_registerName("cellSizeWithSize:safeAreaInsets:"));
         if (mi) {
             g_cells[g_cellCount].origInsets = method_getImplementation(mi);
-            class_replaceMethod(cls, sel_registerName("cellSizeWithSize:safeAreaInsets:"),
-                                (IMP)h_cellSizeInsets, method_getTypeEncoding(mi));
+            class_replaceMethod(cls, method_getName(mi), (IMP)h_cellSizeInsets,
+                                method_getTypeEncoding(mi));
         }
-        if (g_cells[g_cellCount].origSize || g_cells[g_cellCount].origInsets) {
-            g_cellCount++;
-            YTModLog(@"promo: cell %s → 0", YTM_CELL_CLASSES[i]);
-        }
+        g_cellCount++;
+        YTModLog(@"promo: cell %s → 0", YTM_CELL_CLASSES[i]);
     }
 }
 

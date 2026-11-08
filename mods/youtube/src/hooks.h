@@ -57,6 +57,9 @@ void YTAdBlockInstall(void);
 // Chặn cell quảng cáo feed + promo/upsell Premium.
 void YTPromoBlockInstall(void);
 
+// Lọc entry quảng cáo/promo khỏi section renderers.
+void YTSectionFilterInstall(void);
+
 #ifdef __cplusplus
 }
 #endif
