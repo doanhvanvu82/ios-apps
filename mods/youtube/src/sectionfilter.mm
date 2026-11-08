@@ -196,35 +196,14 @@ static id h_tabContents(id s, SEL c) {
 // (YTIElementRenderer fresh, không có renderer nào bên trong): builder không có
 // gì để dựng cell, element bị bỏ qua hoàn toàn (đây là cách chặn gốc của
 // YTLite/Spoof các bản mới).
+// BỎ eldata XÓA (3.18): log 3.17 chứng minh XÓA elementData khiến YouTube dựng
+// YTGhostCardCell (cell placeholder trống 430x341) THAY cell ad → khoảng trống
+// chiếm chỗ trong feed ("element rỗng" user báo). elementData giờ giữ nguyên;
+// cell ad thật bị nodehide ẨN ngay lúc vào viewport (didEnterVisibleState hook,
+// đã chạy đúng ở 3.17) + sweep/rezero giữ frame 0.
 static IMP _o_elData;
 static id h_elData(id s, SEL c) {
-    id v = ((id (*)(id, SEL))_o_elData)(s, c);
-    if (!YTAdsOffEnabled()) return v;
-    @try {
-        // Dấu hiệu quảng cáo nằm ở MÔ TẢ CỦA CHÍNH ELEMENT RENDERER (`s`).
-        NSString *desc = [s respondsToSelector:@selector(description)]
-                             ? [s description] : @"";
-        if (ytm_desc_is_ad(desc ?: @"")) {
-            static int logged = 0;
-            if (logged < 200) {
-                logged++;
-                YTModLog(@"eldata: XÓA dữ liệu element quảng cáo %@", s);
-            }
-            // 2.5 crash: trả YTIElementRenderer (sai class, khác kiểu với data)
-            // → caller gọi selector của data lên nó → doesNotRecognizeSelector.
-            // Cách đúng: tạo YTIElementRenderer RỖNG rồi gọi IMP GỐC elementData
-            // trên nó (không qua dispatch nên hook không tự đệ quy) — kết quả là
-            // data RỖNG CÙNG KIỂU với data thật, an toàn cho mọi selector mà
-            // caller gọi (đúng như element không có data: hasElementData=NO).
-            Class cls = object_getClass(s);
-            id blank = [[cls alloc] init];
-            id empty = blank
-                ? ((id (*)(id, SEL))_o_elData)(blank, c)
-                : nil;
-            return empty ?: v;
-        }
-    } @catch (__unused NSException *e) {}
-    return v;
+    return ((id (*)(id, SEL))_o_elData)(s, c);
 }
 
 // --- TẦNG ĐÚNG (log 3.0): không tạo controller cho element quảng cáo ---------
