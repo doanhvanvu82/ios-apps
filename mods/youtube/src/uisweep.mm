@@ -18,6 +18,7 @@
 #import "hooks.h"
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
+#import <objc/message.h>
 
 static int g_sweepHitTotal = 0;
 static NSTimer *g_sweepTimer = nil;
@@ -77,7 +78,17 @@ static void ytm_hide_ad_cell_from(UIView *root) {
             for (UIView *sub in cv.subviews) {
                 NSString *scn = NSStringFromClass(object_getClass(sub));
                 id node = nil;
-                @try { node = [sub valueForKey:@"node"]; } @catch (__unused NSException *e) {}
+                @try {
+                    node = [sub valueForKey:@"node"];
+                } @catch (__unused NSException *e) {
+                    node = nil;
+                }
+                if (!node) {
+                    SEL anSel = sel_registerName("asyncdisplaykit_node");
+                    if ([sub respondsToSelector:anSel]) {
+                        node = ((id (*)(id, SEL))objc_msgSend)(sub, anSel);
+                    }
+                }
                 NSString *ncn = node ? NSStringFromClass(object_getClass(node)) : @"(không có node)";
                 NSString *key = [ccn stringByAppendingFormat:@"|%@|%@", scn, ncn];
                 if (![nodeSeen containsObject:key]) {
