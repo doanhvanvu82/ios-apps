@@ -83,11 +83,13 @@ if [ "$(uname -s)" = "Darwin" ]; then
   SDK="${IOS_SDK:-$(xcrun -sdk iphoneos --show-sdk-path)}"
   LD="${IOS_LD:-}"   # rỗng = ld của Apple
   OBJDUMP="${OBJDUMP:-$(xcrun -f llvm-objdump)}"
+  NM="${NM:-$(xcrun -f llvm-nm)}"
 else
   CLANG="${IOS_CLANG:-$TOOLCHAIN/usr/bin/clang}"
   SDK="${IOS_SDK:-$SDK_DEFAULT}"
   LD="${IOS_LD:-$HOME/.swiftpm/swift-sdks/darwin.artifactbundle/toolset/bin/ld64.lld}"
   OBJDUMP="${OBJDUMP:-$TOOLCHAIN/usr/bin/llvm-objdump}"
+  NM="${NM:-$TOOLCHAIN/usr/bin/llvm-nm}"
 fi
 
 [ -x "$CLANG" ] || { echo "❌ không thấy clang tại $CLANG" >&2; exit 1; }
@@ -163,6 +165,9 @@ build_dylib() {
     objs+=("$o")
   done
 
+  # -undefined dynamic_lookup: symbol của app dùng lúc chạy. Không dùng
+  # -fvisibility=hidden cho hàm export (main.mm gọi XTDiagInstall…); hidden
+  # + C++ name mangling từng làm dyld crash "symbol not found _YTDiagInstall".
   local link_args=()
   [ -n "$LD" ] && link_args+=("--ld-path=$LD")
   "$CLANG" -target arm64-apple-ios17.0 -isysroot "$SDK" ${link_args[@]+"${link_args[@]}"} \
@@ -172,6 +177,16 @@ build_dylib() {
     -undefined dynamic_lookup \
     -Wl,-arch,arm64 -Wl,-platform_version,ios,17.0,17.0
   echo "→ dylib: $(du -h "$out" | cut -f1)  $out"
+  # Tự kiểm tra: mọi hàm C dylib tự gọi (main.mm) phải định nghĩa trong dylib,
+  # không được còn undefined — nếu không dyld abort lúc mở app.
+  local undef
+  undef=$("${NM:-$(command -v llvm-nm)}" -u "$out" 2>/dev/null \
+    | grep -E '_(YTHooksInstall|YTMenuInstall|YTDiagInstall|YTModLogOpen|YTModBool|YTModLog)$' || true)
+  if [ -n "$undef" ]; then
+    echo "❌ dylib còn symbol nội bộ chưa định nghĩa:" >&2
+    printf '   %s\n' $undef >&2
+    exit 1
+  fi
 }
 
 # ---------------------------------------------------------------------------
