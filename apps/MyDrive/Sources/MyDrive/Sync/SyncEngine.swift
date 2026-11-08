@@ -732,20 +732,45 @@ final class SyncEngine: ObservableObject {
                 }
                 for id in keep { markTree(id) }
 
-                // Rác = folder KHÔNG trên cây nào. Xoá hẳn để UI web sạch ngay.
+                // Rác = folder KHÔNG trên cây nào. File nằm trong rác → GOM về
+                // bản cùng tên trên cây (reparent: cùng tên cha thì chuyển file;
+                // khác cha thì giữ nguyên — chỉ cảnh báo). Xoá rác rỗng sau đó.
+                // (Folder trùng THƯỜNG có file: worker A tạo folder → upload file
+                // vào đó, worker B tạo bản trùng → cũng có file riêng — bug 08/11.)
+                let filesByParent: [String: [DriveFile]] = Dictionary(grouping: all.filter { !$0.isFolder }) { $0.parents?.first ?? "" }
+                var moved = 0
                 var removed = 0
                 for (id, f) in byID where !onTree.contains(id) {
-                    // An toàn: chỉ xoá folder RỖNG (rác TOCTOU luôn rỗng — file
-                    // đều nằm trong cây hợp lệ). Chứa file → khỏi đụng.
-                    let hasFiles = all.contains { !$0.isFolder && ($0.parents ?? []).contains(id) }
-                    guard !hasFiles else { continue }
+                    let junkFiles = filesByParent[id] ?? []
+                    for junk in junkFiles {
+                        // Bản chính thống: folder CÙNG TÊN, cùng parent name, trên cây,
+                        // gần nhất theo tổ tiên từ root (đi từ parent của rác lên tìm
+                        // sibling trùng tên đã được markTree). Suy từ parent rác:
+                        if let junkParent = junk.parents?.first,
+                           let canonical = (folders[junkParent] ?? []).first(where: { $0.name == f.name && onTree.contains($0.id) }) {
+                            do {
+                                _ = try await client.updateMetadata(id: junk.id, addParents: canonical.id, removeParents: junkParent)
+                                moved += 1
+                                AppLog.log("sync", "📦 Gom \(junk.name) từ folder trùng \(f.name) về bản chính thống")
+                            } catch {
+                                AppLog.log("sync", "⚠️ Không gom được \(junk.name): \(error.localizedDescription) — giữ folder trùng")
+                                continue
+                            }
+                        } else {
+                            AppLog.log("sync", "⚠️ Folder trùng \(f.name) chứa \(junkFiles.count) file nhưng không tìm được bản chính thống cùng tên — KHÔNG đụng tới")
+                            continue
+                        }
+                    }
+                    // Sau khi gom (hoặc rỗng sẵn) → xoá hẳn.
+                    let stillHas = (filesByParent[id] ?? []).contains { $0.parents?.first == id }
+                    guard !stillHas else { continue }
                     try? await client.delete(id: id)
                     removed += 1
                     AppLog.log("sync", "🧹 Xoá folder trùng \(f.name) (\(id.prefix(8))…) — rác TOCTOU")
                 }
-                if removed > 0 {
+                if removed > 0 || moved > 0 {
                     removedTotal += removed
-                    AppLog.log("sync", "🧹 \(email): đã xoá \(removed) folder trùng")
+                    AppLog.log("sync", "🧹 \(email): đã xoá \(removed) folder trùng, gom \(moved) file về bản chính thống")
                 }
             } catch {
                 AppLog.log("sync", "⚠️ Không dọn folder trùng trên \(email): \(error.localizedDescription)")

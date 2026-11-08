@@ -137,7 +137,8 @@ final class DriveClient {
         var out: [DriveFile] = []
         var pageToken: String? = nil
         // name BẮT BUỘC: DriveFile.name là non-optional — thiếu field là decode chết (bug 1.97).
-        let fields = "nextPageToken, files(id,name,parents)"
+        // mimeType cần cho isFolder (dedupe folder trùng phân biệt folder/file).
+        let fields = "nextPageToken, files(id,name,mimeType,parents)"
         repeat {
             var query = [
                 URLQueryItem(name: "q", value: "trashed = false"),
