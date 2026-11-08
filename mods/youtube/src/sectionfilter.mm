@@ -4,10 +4,18 @@
 // Quảng cáo feed của 21.44.4 là element mang `ad_logging_data` /
 // `ad_slot_logging_data` (xem log), không phải các cell promo cũ — nên ngoài
 // tên lớp và các getter `has…Renderer` còn phải nhận diện qua mô tả protobuf.
+//
+// Log 2.0/2.1: ad dùng `use_video_cell_controller_on_ios` → render qua cell
+// controller video thường, không có tên class "Promoted*" để chặn. Vì vậy phải
+// chặn ở tầng chung: YTSectionController tra kích thước từng entry qua
+// `sizeForCellController:withSize:` — entry quảng cáo bị trả CGSizeZero nên
+// không chiếm chỗ, không hiện, không bấm được (cell vẫn tồn tại nhưng vô hình).
 #import "common.h"
 #import "hooks.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
+#import <CoreGraphics/CoreGraphics.h>
+#import <UIKit/UIKit.h>
 
 // Selector "có renderer quảng cáo/promo" xuất hiện trong binary 21.44.4.
 // Một số object chỉ trả lời một phần trong danh sách nên kiểm tra từng cái.
@@ -33,6 +41,7 @@ static const char *YTM_NAME_MARKERS[] = {
     "promoted", "ypcpromotion", "mastheadad", "movieupsell",
     "subscriptionproductupsell", "interstitialpromo", "infead", "displayad",
     "organicmediaplayerad", "mealbarpromo", "shoppingad", "shoppingcompanionad",
+    "adloggingdata", "adslot", "adlayout", "elementsad", "adelement",
 };
 #define YTM_NAME_COUNT ((int)(sizeof(YTM_NAME_MARKERS) / sizeof(YTM_NAME_MARKERS[0])))
 
@@ -46,6 +55,7 @@ static const char *YTM_DESC_MARKERS[] = {
     "ypc_promotion_renderer", "mealbar_promo_renderer", "promo_renderer",
     "video_masthead_ad_renderer", "in_feed_ad_layout_renderer",
     "display_ads", "brand_promo", "sponsored", "shopping_companion_ad_renderer",
+    "slot_type_in_feed",
 };
 #define YTM_DESC_COUNT ((int)(sizeof(YTM_DESC_MARKERS) / sizeof(YTM_DESC_MARKERS[0])))
 
@@ -83,6 +93,16 @@ static BOOL ytm_is_ad_entry(id obj, BOOL allowDesc) {
         SEL sel = sel_registerName(YTM_MARKER_SELS[k]);
         if (![obj respondsToSelector:sel]) continue;
         if (((BOOL (*)(id, SEL))objc_msgSend)(obj, sel)) ad = YES;
+    }
+    // hasAdLoggingData: có mặt trên nhiều model generated (getter has-field của
+    // protobuf) — chính là dấu hiệu `ad_logging_data` trong log.
+    if (!ad) {
+        SEL hasLogging = sel_registerName("hasAdLoggingData");
+        if ([obj respondsToSelector:hasLogging]) {
+            @try {
+                if (((BOOL (*)(id, SEL))objc_msgSend)(obj, hasLogging)) ad = YES;
+            } @catch (__unused NSException *e) {}
+        }
     }
     // Chỉ dùng mô tả protobuf ở tầng element: mô tả của section lồng cả nội dung
     // bên trong, lọc theo nó sẽ xoá oan cả section chứa video thường.
@@ -168,6 +188,44 @@ static id h_tabContents(id s, SEL c) {
     return ytm_filter(v);
 }
 
+// --- TẦNG CUỐI: nén cell quảng cáo ở section controller ---------------------
+// Log 2.1: ad trang chủ là element thường có `ad_logging_data` → không có class
+// "Promoted*" riêng để chặn tên. Mọi entry của section đều đi qua
+// YTSectionController.sizeForCellController:withSize: để lấy kích thước cell —
+// entry quảng cáo được trả CGSizeZero: không chiếm chỗ, không hiện, không bấm.
+// (`use_video_cell_controller_on_ios` chỉ nghĩa là cell đó dựng bằng cell
+// controller video, kích thước vẫn đi qua hàm này.)
+static int g_sizeLog = 0;
+
+static IMP _o_sizeForCell;
+static CGSize h_sizeForCell(id s, SEL c, id cc, CGSize size) {
+    CGSize r = ((CGSize (*)(id, SEL, id, CGSize))_o_sizeForCell)(s, c, cc, size);
+    if (!YTAdsOffEnabled()) return r;
+    @try {
+        // cell controller có property `entry` (YTCellController) — model gốc.
+        id entry = [cc respondsToSelector:@selector(entry)]
+                       ? ((id (*)(id, SEL))objc_msgSend)(cc, @selector(entry))
+                       : nil;
+        if (!entry && [cc respondsToSelector:@selector(elementEntry)])
+            entry = ((id (*)(id, SEL))objc_msgSend)(cc, @selector(elementEntry));
+        if (!entry) return r;
+        // Mô tả entry là nơi `ad_logging_data` xuất hiện (element renderer).
+        NSString *desc = [entry description] ?: @"";
+        if (!ytm_desc_is_ad(desc)) return r;
+        static int logged = 0;
+        if (logged < 25) {
+            logged++;
+            YTModLog(@"size: NÉN cell quảng cáo %@ (%.0fx%.0f → 0)",
+                     NSStringFromClass(object_getClass(cc)), r.width, r.height);
+        }
+        return CGSizeZero;
+    } @catch (__unused NSException *e) {
+        return r;
+    }
+}
+
+// Section-level list: chặn cả section mang renderer quảng cáo/promo đã lỡ qua
+// các tầng trên.
 static int g_sectionDone = 0;
 
 static BOOL ytm_install_one(const char *clsName, const char *selName, IMP hook, IMP *orig,
@@ -183,14 +241,23 @@ static BOOL ytm_install_one(const char *clsName, const char *selName, IMP hook, 
 }
 
 void YTSectionFilterInstall(void) {
-    if (g_sectionDone >= 4) return;
-    g_sectionDone = 0;
-    g_sectionDone += ytm_install_one("YTISectionListRenderer", "sectionRenderers",
-                                     (IMP)h_sectionRenderers, &_o_sectionRenderers, "feed");
-    g_sectionDone += ytm_install_one("YTIWatchNextResponse", "sectionRenderers",
-                                     (IMP)h_wnSectionRenderers, &_o_wnSectionRenderers, "watch");
-    g_sectionDone += ytm_install_one("ELMPBFeedData", "contents",
-                                     (IMP)h_feedContents, &_o_feedContents, "elm");
-    g_sectionDone += ytm_install_one("YTIElementTabRenderer", "contentsArray",
-                                     (IMP)h_tabContents, &_o_tabContents, "tab");
+    // Chỉ cài mỗi hook 1 lần: cài đè lên chính mình sẽ khiến *orig trỏ vào hook
+    // của mình → đệ quy vô hạn.
+    static BOOL done[5];
+    int n = 0;
+    struct { const char *cls; const char *sel; IMP hook; IMP *orig; const char *label; } all[5] = {
+        {"YTISectionListRenderer", "sectionRenderers", (IMP)h_sectionRenderers, &_o_sectionRenderers, "feed"},
+        {"YTIWatchNextResponse", "sectionRenderers", (IMP)h_wnSectionRenderers, &_o_wnSectionRenderers, "watch"},
+        {"ELMPBFeedData", "contents", (IMP)h_feedContents, &_o_feedContents, "elm"},
+        {"YTIElementTabRenderer", "contentsArray", (IMP)h_tabContents, &_o_tabContents, "tab"},
+        {"YTSectionController", "sizeForCellController:withSize:", (IMP)h_sizeForCell, &_o_sizeForCell, "size"},
+    };
+    for (int i = 0; i < 5; i++) {
+        if (done[i]) { n++; continue; }
+        if (ytm_install_one(all[i].cls, all[i].sel, all[i].hook, all[i].orig, all[i].label)) {
+            done[i] = YES;
+            n++;
+        }
+    }
+    g_sectionDone = n;
 }
