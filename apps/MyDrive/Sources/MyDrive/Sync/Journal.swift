@@ -119,6 +119,28 @@ final class Journal: ObservableObject {
         queue.sync { entries }
     }
 
+    /// Loại ops chỉ tới path không còn trong index (file/folder đã bị xóa khi
+    /// op kẹt). Tránh vòng "bỏ qua → giữ → bỏ qua" vô hạn (bug 08/11: 28.963 log).
+    func purgeOrphans(validPaths: Set<String>) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            let before = self.entries.count
+            self.entries.removeAll { e in
+                switch e.op {
+                case let .uploadFile(p): return !validPaths.contains(p)
+                case let .createFolder(p): return !validPaths.contains(p)
+                default: return false
+                }
+            }
+            let removed = before - self.entries.count
+            if removed > 0 {
+                self.persist()
+                self.publishCount()
+                AppLog.log("journal", "🧹 Loại \(removed) op chỉ tới path đã bị xóa")
+            }
+        }
+    }
+
     /// Hoàn tất op uploadFile cho path (gọi từ callback nền khi mọi part xong).
     func completeUpload(path: String) {
         queue.async { [weak self] in

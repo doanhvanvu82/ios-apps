@@ -215,6 +215,11 @@ final class SyncEngine: ObservableObject {
     // MARK: - Đẩy Journal
 
     private func processJournal(rootIDs: [String: String]) async {
+        // Dọn ops chỉ tới path đã bị xóa khỏi index (file/folder xóa khi op kẹt
+        // — không dọn thì vòng sau lại bỏ qua → giữ → bỏ qua… vô hạn).
+        let validPaths = Set(index.allNodes().map(\.path))
+        journal.purgeOrphans(validPaths: validPaths)
+
         let entries = journal.pending()
         guard !entries.isEmpty else { return }
         AppLog.log("sync", "▶️ Đẩy \(entries.count) thao tác…")
@@ -393,7 +398,13 @@ final class SyncEngine: ObservableObject {
     private func uploadFile(path: String) async throws {
         let store = self.store
         guard let size = store.fileSize(at: path.components) else {
-            AppLog.log("sync", "⚠️ File không tồn tại ở mirror: \(path) — bỏ qua")
+            // File không tồn tại ở mirror (đã bị xóa/người dùng dọn) — op này
+            // PHẢI bị loại khỏi journal, không "bỏ qua rồi giữ" (kéo dài vòng
+            // sync vô hạn: bỏ qua → giữ → bỏ qua… bug 08/11, 28.963 lần log).
+            AppLog.log("sync", "🧹 Op upload \(path): file không còn ở mirror — loại op")
+            index.remove(path: path)
+            IndexStore.shared.removeTree(prefix: path + "/")
+            Journal.shared.completeUpload(path: path)
             return
         }
         let fileName = path.components.last ?? "file"
@@ -489,6 +500,13 @@ final class SyncEngine: ObservableObject {
     private func createFolder(path: String, rootIDs: [String: String]) async throws {
         let comps = path.components
         guard let last = comps.last else { return }
+        // Folder đã bị xóa khỏi index (người dùng xóa ở app trong lúc op kẹt) →
+        // KHÔNG tái tạo trên Drive (đó là cách folder "Mangas" bị tạo lại 6 lần
+        // dù người dùng đã xóa sạch trên Drive web — bug 08/11).
+        guard index.node(at: path) != nil else {
+            AppLog.log("sync", "🧹 Op createFolder \(path): node đã bị xóa khỏi index — bỏ op")
+            return
+        }
         // Tạo trên account đang active (folder không tốn dung lượng).
         guard let activeEmail = accounts.activeEmail ?? rootIDs.keys.first,
               let client = accounts.client(for: activeEmail),
