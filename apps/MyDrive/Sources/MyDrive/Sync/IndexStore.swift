@@ -154,6 +154,11 @@ final class IndexStore: ObservableObject {
         save()
     }
 
+    /// Đọc + mutate node nếu tồn tại (dùng cho callback nền — cùng ngữ nghĩa update).
+    func withNode(at path: String, _ body: (inout IndexNode) -> Void) {
+        update(path: path, body)
+    }
+
     /// Toàn bộ keys.
     var keys: [String] { Array(index.keys) }
 

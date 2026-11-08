@@ -124,6 +124,15 @@ final class BackgroundUploader: NSObject {
                     path: job.path, partIndex: job.partIndex,
                     accountEmail: job.email, driveFileId: fileID
                 )
+                // Part cuối của file xong → hoàn tất op upload tương ứng trong
+                // journal (nếu còn — op có thể đã bị complete vì lý do khác).
+                IndexStore.shared.withNode(at: job.path) { node in
+                    guard let parts = node.parts, !parts.isEmpty else { return }
+                    let allDone = parts.allSatisfy { $0.driveFileId != nil }
+                    guard allDone else { return }
+                    // Tất cả part có ID → op upload path này coi như xong.
+                    Journal.shared.completeUpload(path: job.path)
+                }
             } else {
                 AppLog.log("bgup", "❌ Nền lỗi: \(job.remoteName) — \(error ?? "?")")
             }

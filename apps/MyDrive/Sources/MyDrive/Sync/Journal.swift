@@ -119,6 +119,19 @@ final class Journal: ObservableObject {
         queue.sync { entries }
     }
 
+    /// Hoàn tất op uploadFile cho path (gọi từ callback nền khi mọi part xong).
+    func completeUpload(path: String) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.entries.removeAll { e in
+                if case let .uploadFile(p) = e.op { return p == path }
+                return false
+            }
+            self.persist()
+            self.publishCount()
+        }
+    }
+
     var count: Int {
         queue.sync { entries.count }
     }

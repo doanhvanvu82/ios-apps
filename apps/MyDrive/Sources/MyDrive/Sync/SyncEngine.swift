@@ -262,7 +262,23 @@ final class SyncEngine: ObservableObject {
             guard let entry = counter.next(entries) else { return }
             do {
                 try await processEntry(entry, rootIDs: rootIDs)
-                journal.complete(entry)
+                // Op uploadFile: chỉ complete NGAY khi mọi part đã có fileID
+                // (tức upload thật sự xong — gồm cả trường hợp job nền đã kịp
+                // callback trước khi vòng này kiểm tra). Nếu part vẫn nil
+                // (đã GIAO nền, callback chưa về) → GIỮ op: callback nền sẽ
+                // gọi completeUpload khi xong; nếu nền lỗi thì op còn đó để retry.
+                // Giữ op tránh requeue sinh op TRÙNG khi app đóng giữa chừng.
+                var isFullyUploaded = true
+                if case let .uploadFile(p) = entry.op {
+                    if let parts = index.node(at: p)?.parts, !parts.isEmpty {
+                        isFullyUploaded = parts.allSatisfy { $0.driveFileId != nil }
+                    } else {
+                        isFullyUploaded = false
+                    }
+                }
+                if isFullyUploaded {
+                    journal.complete(entry)
+                }
                 await setPhase(.working("Đã đẩy \(entry.op.describe)"))
             } catch let err as DriveError {
                 switch err {
@@ -799,8 +815,18 @@ final class SyncEngine: ObservableObject {
 
     /// File tồn tại ở mirror nhưng chưa có trong index → đăng ký upload
     /// (tự xử lý trường hợp người dùng kéo file vào mirror qua USB File Sharing).
+    /// DEDUPE: file đã có op uploadFile trong journal thì KHÔNG thêm nữa —
+    /// không vậy mỗi lần cài lại + copy lại là queue bành trướng (bug 08/11).
     private func adoptOrphanLocalFiles() async {
         let scanned = store.scanAll()
+        var queuedPaths = Set<String>()
+        for e in journal.pending() {
+            switch e.op {
+            case let .uploadFile(p): queuedPaths.insert(p)
+            case let .createFolder(p): queuedPaths.insert(p)
+            default: break
+            }
+        }
         var adopted = 0
         for rel in scanned.files {
             let path = rel
@@ -811,7 +837,9 @@ final class SyncEngine: ObservableObject {
                 modified: Date(), parts: nil, rev: 1, driveFolderId: nil
             )
             index.upsert(path: path, node: node)
-            journal.enqueue(.uploadFile(path: path))
+            if !queuedPaths.contains(path) {
+                journal.enqueue(.uploadFile(path: path))
+            }
             adopted += 1
         }
         // Thư mục mới kéo thả (không có file nào trong index).
@@ -821,7 +849,9 @@ final class SyncEngine: ObservableObject {
                 name: rel.components.last ?? rel, isDirectory: true, size: 0,
                 modified: Date(), parts: nil, rev: 1, driveFolderId: nil
             ))
-            journal.enqueue(.createFolder(path: rel))
+            if !queuedPaths.contains(rel) {
+                journal.enqueue(.createFolder(path: rel))
+            }
             adopted += 1
         }
         if adopted > 0 {
