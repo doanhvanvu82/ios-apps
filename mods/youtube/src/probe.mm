@@ -130,22 +130,19 @@ void YTProbeInstall(void) {
                                 method_getTypeEncoding(m));
             YTModLog(@"probe: sectionRenderers OK");
         }
-        static const char *bases[] = {
-            "YTActiveViewCellController", "YTElementsCellController",
-            "YTVideoElementCellController", "YTCellController",
-            "YTInnerTubeCellController", "YTMutableCellFactory",
-            "YTChainedCellFactory",
-        };
-        static IMP origs[7];
-        for (size_t i = 0; i < sizeof(bases) / sizeof(bases[0]); i++) {
-            Class b = objc_getClass(bases[i]);
-            if (!b) continue;
-            Method bm = class_getInstanceMethod(b, sel_registerName("cellSizeWithSize:"));
-            if (!bm) continue;
-            origs[i] = method_getImplementation(bm);
+        // CHỈ hook nơi cellSizeWithSize: được ĐỊNH NGHĨA TRỰC TIẾP — không dùng
+        // class_getInstanceMethod vì nó tìm theo chuỗi kế thừa: cài hook trên
+        // lớp con trước rồi cài trên lớp cha sẽ khiến method_getImplementation
+        // trả về HOOK vừa cài → _o_cellSize = h_cellSize → đệ quy (crash 2.9,
+        // YouTube-182956: h_cellSize → bl _objc_retain → brk). YTIElementRenderer
+        // dump: chỉ YTCellController định nghĩa trực tiếp cellSizeWithSize:.
+        Class b = objc_getClass("YTCellController");
+        Method bm = b ? class_getInstanceMethod(b, sel_registerName("cellSizeWithSize:")) : NULL;
+        if (bm) {
+            _o_cellSize = method_getImplementation(bm);
             class_replaceMethod(b, sel_registerName("cellSizeWithSize:"), (IMP)h_cellSize,
                                 method_getTypeEncoding(bm));
-            YTModLog(@"probe: size base %s OK", bases[i]);
+            YTModLog(@"probe: size base YTCellController OK");
         }
     });
 }
