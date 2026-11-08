@@ -407,38 +407,20 @@ final class SyncEngine: ObservableObject {
                 "mydRev": "\(index.node(at: path)?.rev ?? 1)",
             ]
 
-            if part.size < 5 * 1024 * 1024 {
-                // Part nhỏ: đẩy ngay trong app (nhanh, ít ops hơn background task).
-                let data = try store.readData(at: path.components)
-                let driveFile = try await client.uploadSmall(data: data, name: part.remoteName, parentID: parentID, appProperties: props, existingID: part.driveFileId)
-                // Part này từng bị trash lúc xóa (khôi phục sau) — PATCH trên file
-                // trashed không kéo nó ra khỏi thùng rác → untrash tường minh.
-                if let existingID = part.driveFileId {
-                    do {
-                        if try await client.get(id: existingID).trashed == true {
-                            try await client.untrash(id: existingID)
-                        }
-                    } catch {
-                        AppLog.log("sync", "⚠️ Không kiểm tra được trạng thái trash của part \(part.index): \(error.localizedDescription)")
-                    }
-                }
-                parts[i].driveFileId = driveFile.id
-                index.update(path: path) { $0.parts = parts }
-                AppLog.log("sync", "✅ Part \(part.index) của \(fileName) → \(part.accountEmail) (\(driveFile.id))")
-            } else {
-                // Part lớn: chuẩn bị file part trên đĩa rồi GIAO cho background
-                // URLSession (daemon nsurlsessiond upload — kill app vẫn chạy).
-                let partURL = store.tmpURL.appendingPathComponent("bgpart-\(UUID().uuidString)")
-                let offset = Int64(part.index) * Chunker.partSize
-                let rangeData = try Chunker.readRange(from: store.url(for: path.components), offset: offset, length: part.size)
-                try rangeData.write(to: partURL, options: .atomic)
-                _ = try await client.startBackgroundUpload(
-                    fileURL: partURL, name: part.remoteName, parentID: parentID,
-                    appProperties: props, path: path,
-                    partIndex: part.index, partSize: part.size
-                )
-                AppLog.log("sync", "🚀 Giao nền part \(part.index) của \(fileName) → \(part.accountEmail)")
-            }
+            // MỌI part đều đi NỀN (background URLSession — daemon nsurlsessiond
+            // upload, app kill/đóng vẫn chạy tiếp; tự đánh thức app ghi kết quả).
+            // Đường upload trong-app đã bỏ: nó chỉ sống khi app mở — với hàng trăm
+            // file nhỏ là nguyên nhân "sync không chạy ngầm" (bug 08/11/2026).
+            let partURL = store.tmpURL.appendingPathComponent("bgpart-\(UUID().uuidString)")
+            let offset = Int64(part.index) * Chunker.partSize
+            let rangeData = try Chunker.readRange(from: store.url(for: path.components), offset: offset, length: part.size)
+            try rangeData.write(to: partURL, options: .atomic)
+            _ = try await client.startBackgroundUpload(
+                fileURL: partURL, name: part.remoteName, parentID: parentID,
+                appProperties: props, path: path,
+                partIndex: part.index, partSize: part.size
+            )
+            AppLog.log("sync", "🚀 Giao nền part \(part.index) của \(fileName) → \(part.accountEmail)")
         }
 
         // 3) Upload xong mọi part → cập nhật node.
