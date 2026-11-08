@@ -3,7 +3,12 @@
 Tiêm dylib ObjC++ vào IPA YouTube **đã giải mã** (bản dump từ thiết bị), bật:
 
 - **Chặn quảng cáo**: trả `NO` cho các cờ monetized/preroll của `YTIPlayerResponse`,
-  chặn `YTAdBreakServiceImpl` request ad và bỏ qua toàn bộ pipeline dựng slot ad.
+  chặn `YTAdBreakServiceImpl` request ad, và chặn ở tầng **ad-slot** (nơi iOS 21.x
+  thực sự dựng quảng cáo): `createSlotFromAdSlotRenderer:` → nil,
+  `YTAdSlotRendererAdapter`/`YTAdBreakRendererAdapter` init → nil,
+  `adSlotRenderers`/`adArrayFromPlayerBytesAdLayoutRenderer:adBreaks:` → `[]`,
+  `adPlayerResponse` → nil. Các class ad của YouTube thuộc module tải lười nên
+  `adblock.mm` thử cài lại mỗi 2 giây trong 20 giây đầu (xem log `ads: OK`).
 - **Phát nền / PiP**: ép `isBackgroundableByUserSettings` /
   `isPlayableInBackground` / `isPlayableInPictureInPicture` = `YES`,
   `HAMPlayer.setAllowsBackgroundPlayback:` = `YES`, tắt `isPipOffByDefault`.
