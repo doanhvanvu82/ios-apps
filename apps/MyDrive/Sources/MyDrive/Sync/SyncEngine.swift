@@ -573,9 +573,25 @@ final class SyncEngine: ObservableObject {
     private func pullMissingFiles() async {
         let all = index.allNodes()
         var toPull: [(path: String, node: IndexNode)] = []
+        var orphans = 0
         for (path, node) in all where !node.isDirectory {
             if store.fileSize(at: path.components) == nil {
+                // Node không có part nào (dựng từ Drive nhưng part bị trash hết,
+                // hoặc node mồ côi sau lỗi) — không tải được bao giờ → bỏ khỏi
+                // index để không kéo-về mỗi vòng sync (nguồn “Cần tải về N” dai dẳng).
+                if (node.parts ?? []).isEmpty || (node.parts ?? []).allSatisfy({ $0.driveFileId == nil }) {
+                    orphans += 1
+                    continue
+                }
                 toPull.append((path, node))
+            }
+        }
+        if orphans > 0 {
+            AppLog.log("sync", "🧹 Bỏ \(orphans) node không có part khỏi index (không thể tải về)")
+            for (path, node) in all where !node.isDirectory {
+                if (node.parts ?? []).isEmpty || (node.parts ?? []).allSatisfy({ $0.driveFileId == nil }) {
+                    index.remove(path: path)
+                }
             }
         }
         guard !toPull.isEmpty else { return }
@@ -716,6 +732,9 @@ final class SyncEngine: ObservableObject {
         // Không index nào → dựng từ appProperties trên Drive (kế hoạch B).
         AppLog.log("sync", "ℹ️ Không có index.json — dựng index từ appProperties trên Drive…")
         await rebuildIndexFromDrive(rootIDs: rootIDs)
+        // GHI ĐÈ index.json mới lên Drive: bản cũ đã HỎNG (đó là lý do rơi vào
+        // plan B) — không đè lại thì lần cài lại sau lại đọc bản hỏng → lại plan B.
+        await mirrorIndex(rootIDs: rootIDs)
     }
 
     /// Dựng index từ Drive khi mất index.json. appProperties chỉ mang
