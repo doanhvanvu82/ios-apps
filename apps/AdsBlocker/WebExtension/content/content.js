@@ -271,7 +271,6 @@
       const f = featuresOf(el, el.getBoundingClientRect(), getComputedStyle(el));
       if (isInvisibleOverlay(f)) {
         log("overlayAt: found", el.tagName, "zIndex=", f.zIndex, "fixed=", f.fixed, "absolute=", f.absolute, "transparent=", f.transparent);
-        logNative("overlay", `found ${el.tagName} zIndex=${f.zIndex} fixed=${f.fixed} absolute=${f.absolute}`);
         return el;
       }
     }
@@ -280,7 +279,6 @@
 
   function removeOverlay(el, how) {
     log("removeOverlay:", how, "el:", el?.tagName, el?.className?.slice(0, 50));
-    logNative("overlay", `remove ${how}: ${el?.tagName} ${(el?.className || '').slice(0, 30)}`);
     reportBlocked("overlay", el.querySelector("a[href]")?.href || el.getAttribute("href") || "", how);
     el.remove();
   }
@@ -296,7 +294,7 @@
         if (el) { removeOverlay(el, "lớp phủ trong suốt"); removed++; }
       }
     }
-    if (removed) { log("sweepOverlays: removed", removed, "overlays"); logNative("overlay", `sweep removed ${removed}`); }
+    if (removed) log("sweepOverlays: removed", removed, "overlays");
   }
 
   let sweepTimer = 0;
@@ -316,13 +314,18 @@
   // không mở link/tab quảng cáo. Listener cũng phải khai báo passive ở các loại còn lại, nếu không trình duyệt vẫn
   // coi cú chạm là "có thể bị chặn" và hoãn việc cuộn tới khi xử lý xong.
   const DEBUG = false; // Bật true để hiển thị log debug trong Safari Developer Tools
+  const LOG_KEY = "adsblocker:lastRun";
+  let logLines = [];
+
   const log = (...args) => {
     const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
     if (DEBUG) console.log("[AdsBlocker]", msg);
-  };
-  // Log quan trọng gửi về background rồi gọi native
-  const logNative = (category, text) => {
-    try { browser.runtime.sendMessage({ type: "extLog", category, text }); } catch {}
+    // Lưu vào storage để popup hiển thị
+    logLines.push(`[${new Date().toLocaleTimeString()}] ${msg}`);
+    if (logLines.length > 100) logLines = logLines.slice(-100);
+    try {
+      browser.storage.local.set({ [LOG_KEY]: { at: new Date().toLocaleString("vi-VN"), lines: logLines } }).catch(() => {});
+    } catch {}
   };
   for (const type of ["pointerdown", "touchstart", "mousedown", "click"]) {
     const cancelClick = type === "click";
@@ -332,7 +335,6 @@
       const el = overlayAt(target instanceof Element ? target : target?.parentElement);
       if (!el) return;
       log(`Guard bắt ${type} trên overlay, cancelClick=${cancelClick}, preventDefault=${cancelClick}`);
-      logNative("guard", `bắt ${type} cancelClick=${cancelClick}`);
       if (cancelClick) event.preventDefault();
       event.stopImmediatePropagation();
       removeOverlay(el, "chạm vào lớp phủ trong suốt");
