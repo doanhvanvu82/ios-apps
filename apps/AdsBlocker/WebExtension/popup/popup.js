@@ -145,6 +145,20 @@ function render() {
   $("diagnose-box").hidden = !host;
   renderSettings(settings);
   $("reload-banner").hidden = !settings.nativeError;
+  // Hiển thị log từ storage.local (adsblocker:lastRun)
+  (async () => {
+    try {
+      const data = await browser.storage.local.get("adsblocker:lastRun");
+      const lastRun = data["adsblocker:lastRun"];
+      if (lastRun && lastRun.lines && lastRun.lines.length) {
+        $("diag").textContent = `Lần hoạt động gần nhất: ${lastRun.at}\n\n` + lastRun.lines.join("\n");
+      } else {
+        $("diag").textContent = "Chưa có log.";
+      }
+    } catch {
+      $("diag").textContent = "Không đọc được log.";
+    }
+  })();
 }
 
 /** Lý do chưa dùng được AI; `needsAds`: thao tác về quảng cáo (quét theo dõi thì không cần bật Chặn quảng cáo). */
