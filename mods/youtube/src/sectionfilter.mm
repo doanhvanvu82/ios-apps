@@ -201,18 +201,21 @@ static id h_elData(id s, SEL c) {
     id v = ((id (*)(id, SEL))_o_elData)(s, c);
     if (!YTAdsOffEnabled()) return v;
     @try {
-        if (v) {
-            NSString *desc = [v description] ?: @"";
-            if (ytm_desc_is_ad(desc)) {
-                static int logged = 0;
-                if (logged < 20) {
-                    logged++;
-                    YTModLog(@"eldata: XÓA dữ liệu element quảng cáo %@", s);
-                }
-                // Trả một YTIElementRenderer rỗng cùng class: không có renderer
-                // con, builder không dựng cell, element bị bỏ qua.
-                return [[objc_getClass("YTIElementRenderer") alloc] init];
+        // Dấu hiệu quảng cáo nằm ở MÔ TẢ CỦA CHÍNH ELEMENT RENDERER (`s`) —
+        // probe in `[s description]` mới thấy `compatibility_options {…
+        // ad_logging_data {…`. 2.4 sai vì kiểm tra `[v description]` (object
+        // data con) nên không bao giờ khớp.
+        NSString *desc = [s respondsToSelector:@selector(description)]
+                             ? [s description] : @"";
+        if (ytm_desc_is_ad(desc ?: @"")) {
+            static int logged = 0;
+            if (logged < 20) {
+                logged++;
+                YTModLog(@"eldata: XÓA dữ liệu element quảng cáo %@", s);
             }
+            // Trả một YTIElementRenderer rỗng: builder không có renderer con để
+            // dựng cell, element bị bỏ qua hoàn toàn.
+            return [[objc_getClass("YTIElementRenderer") alloc] init];
         }
     } @catch (__unused NSException *e) {}
     return v;
