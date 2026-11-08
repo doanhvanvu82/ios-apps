@@ -910,7 +910,6 @@ async function handle(message, sender) {
       await setBadge(tabId, state);
       return null;
     }
-    
     case "getTabState": return getTabState(message.tabId, message.url);
     case "scan": return startScan(message.tabId);
     case "dismissScan":

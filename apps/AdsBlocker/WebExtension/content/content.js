@@ -264,21 +264,16 @@
   // ---------------------------------------------------------------- lớp phủ bắt click
 
   function overlayAt(target) {
-    if (!target) return null;
     for (let el = target, depth = 0; el && el !== document.body && el !== document.documentElement && depth < 6;
       el = el.parentElement, depth++) {
       if (el.hasAttribute(OWN_ATTR)) return null;
       const f = featuresOf(el, el.getBoundingClientRect(), getComputedStyle(el));
-      if (isInvisibleOverlay(f)) {
-        log("overlayAt: found", el.tagName, "zIndex=", f.zIndex, "fixed=", f.fixed, "absolute=", f.absolute, "transparent=", f.transparent);
-        return el;
-      }
+      if (isInvisibleOverlay(f)) return el;
     }
     return null;
   }
 
   function removeOverlay(el, how) {
-    log("removeOverlay:", how, "el:", el?.tagName, el?.className?.slice(0, 50));
     reportBlocked("overlay", el.querySelector("a[href]")?.href || el.getAttribute("href") || "", how);
     el.remove();
   }
@@ -287,14 +282,12 @@
     if (!features.ads || siteRules.keepOverlays || !document.body) return;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    let removed = 0;
     for (const fx of [0.25, 0.5, 0.75]) {
       for (const fy of [0.25, 0.5, 0.75]) {
         const el = overlayAt(document.elementFromPoint(vw * fx, vh * fy));
-        if (el) { removeOverlay(el, "lớp phủ trong suốt"); removed++; }
+        if (el) removeOverlay(el, "lớp phủ trong suốt");
       }
     }
-    if (removed) log("sweepOverlays: removed", removed, "overlays");
   }
 
   let sweepTimer = 0;
@@ -308,37 +301,16 @@
   }
 
   // Lưới an toàn khi lớp phủ xuất hiện sau thời gian quét: gỡ ngay lúc người dùng chạm vào nó.
-  // KHÔNG preventDefault cho pointerdown/touchstart: lớp phủ trong suốt phủ kín màn hình nên mọi cú chạm đều trúng
-  // nó trước, mà chặn mặc định ở touchstart/pointerdown thì iOS huỷ luôn thao tác cuộn → trang không vuốt được
-  // (chỉ bấm được). Cú chạm đã bị stopImmediatePropagation nên script của trang không thấy; chặn click là đủ để
-  // không mở link/tab quảng cáo. Listener cũng phải khai báo passive ở các loại còn lại, nếu không trình duyệt vẫn
-  // coi cú chạm là "có thể bị chặn" và hoãn việc cuộn tới khi xử lý xong.
-  const DEBUG = false; // Bật true để hiển thị log debug trong Safari Developer Tools
-  const LOG_KEY = "adsblocker:lastRun";
-  let logLines = [];
-
-  const log = (...args) => {
-    const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
-    if (DEBUG) console.log("[AdsBlocker]", msg);
-    // Lưu vào storage để popup hiển thị
-    logLines.push(`[${new Date().toLocaleTimeString()}] ${msg}`);
-    if (logLines.length > 100) logLines = logLines.slice(-100);
-    try {
-      browser.storage.local.set({ [LOG_KEY]: { at: new Date().toLocaleString("vi-VN"), lines: logLines } }).catch(() => {});
-    } catch {}
-  };
   for (const type of ["pointerdown", "touchstart", "mousedown", "click"]) {
-    const cancelClick = type === "click";
     window.addEventListener(type, (event) => {
       if (!features.ads || siteRules.keepOverlays || !event.isTrusted) return;
       const target = event.composedPath()[0];
       const el = overlayAt(target instanceof Element ? target : target?.parentElement);
       if (!el) return;
-      log(`Guard bắt ${type} trên overlay, cancelClick=${cancelClick}, preventDefault=${cancelClick}`);
-      if (cancelClick) event.preventDefault();
+      event.preventDefault();
       event.stopImmediatePropagation();
       removeOverlay(el, "chạm vào lớp phủ trong suốt");
-    }, { capture: true, passive: !cancelClick });
+    }, { capture: true, passive: false });
   }
 
   // ---------------------------------------------------------------- snapshot cho AI
@@ -686,8 +658,6 @@
 
   // ---------------------------------------------------------------- khởi động
 
-  console.log("[AdsBlocker] Content script loaded, host:", HOST, "isTop:", IS_TOP);
-  log("Content script loaded, host:", HOST, "isTop:", IS_TOP);
   loadConfig();
   document.addEventListener("DOMContentLoaded", () => {
     applyConfig();
