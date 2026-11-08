@@ -54,6 +54,41 @@ static void ytm_rezero_hidden_cells(void) {
     if (dead) [g_hiddenCells removeObjectsInArray:dead];
 }
 
+// --- LAYOUT: ép layoutAttributes size 0 cho indexPath cell ad đã ẩn ----------
+// cell.hidden + frame 0 bị layoutAttributes ghi đè khi scroll (nguyên nhân
+// khoảng trống). Hook cấp UICollectionViewLayout bắt mọi subclass (feed dùng
+// ASDK layout). Sửa attribute.size = 0 → layout không cấp chỗ cho cell ad.
+static IMP _o_layoutAttrsInRect;
+static NSArray *h_layoutAttrsInRect(id s, SEL c, CGRect rect) {
+    NSArray *attrs = ((NSArray *(*)(id, SEL, CGRect))_o_layoutAttrsInRect)(s, c, rect);
+    if (!YTAdsOffEnabled() || !g_hiddenIndexPaths.count || !attrs.count) return attrs;
+    @try {
+        NSMutableArray *modified = nil;
+        for (UICollectionViewLayoutAttributes *attr in attrs) {
+            NSIndexPath *ip = attr.indexPath;
+            BOOL hit = NO;
+            for (NSArray *pair in g_hiddenIndexPaths) {
+                if (pair[0] == s && [pair[1] isEqual:ip]) { hit = YES; break; }
+            }
+            if (hit && !CGSizeEqualToSize(attr.size, CGSizeZero)) {
+                if (!modified) modified = [attrs mutableCopy];
+                UICollectionViewLayoutAttributes *a = [attr copy];
+                a.frame = CGRectMake(attr.frame.origin.x, attr.frame.origin.y, 0, 0);
+                [modified replaceObjectAtIndex:[attrs indexOfObject:attr] withObject:a];
+                static int logged = 0;
+                if (logged < 40) {
+                    logged++;
+                    YTModLog(@"layout: ép size 0 cho indexPath %ld-%ld (khoảng trống biến mất)",
+                             (long)ip.section, (long)ip.row);
+                }
+            }
+        }
+        return modified ?: attrs;
+    } @catch (__unused NSException *e) {
+        return attrs;
+    }
+}
+
 static void ytm_hide_ad_cell_from(UIView *root) {
     NSMutableArray<UIView *> *stack = [NSMutableArray arrayWithObject:root];
     while (stack.count) {
@@ -208,6 +243,14 @@ void YTUISweepInstall(void) {
         }
         g_hiddenCells = [NSMutableArray new];
         g_hiddenIndexPaths = [NSMutableArray new];
+        Class layoutCls = objc_getClass("UICollectionViewLayout");
+        Method lm = class_getInstanceMethod(layoutCls, sel_registerName("layoutAttributesForElementsInRect:"));
+        if (lm) {
+            _o_layoutAttrsInRect = method_getImplementation(lm);
+            class_replaceMethod(layoutCls, sel_registerName("layoutAttributesForElementsInRect:"),
+                                (IMP)h_layoutAttrsInRect, method_getTypeEncoding(lm));
+            YTModLog(@"uisweep: hook layoutAttributes OK");
+        }
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
             ytm_sweep_once();
