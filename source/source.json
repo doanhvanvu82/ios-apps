@@ -20,7 +20,7 @@
         {
           "version": "1.68",
           "buildVersion": "68",
-          "date": "2026-11-08T04:12:28+00:00",
+          "date": "2026-11-08T04:23:18+00:00",
           "localizedDescription": "Build 68",
           "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.68-68.ipa",
           "size": 1982836
@@ -48,7 +48,7 @@
         {
           "version": "2.30",
           "buildVersion": "130",
-          "date": "2026-11-08T04:12:28+00:00",
+          "date": "2026-11-08T04:23:18+00:00",
           "localizedDescription": "Build 130",
           "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub-2.30-130.ipa",
           "size": 74762213
@@ -76,7 +76,7 @@
         {
           "version": "1.66",
           "buildVersion": "66",
-          "date": "2026-11-08T04:12:28+00:00",
+          "date": "2026-11-08T04:23:18+00:00",
           "localizedDescription": "Build 66",
           "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate-1.66-66.ipa",
           "size": 283099
@@ -95,19 +95,19 @@
       "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
       "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/MyDrive.png",
       "tintColor": "#738CFF",
-      "version": "1.92",
+      "version": "1.93",
       "versionDate": "2026-11-08",
-      "versionDescription": "Build 92",
-      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/MyDrive-1.92-92.ipa",
-      "size": 1099734,
+      "versionDescription": "Build 93",
+      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/MyDrive-1.93-93.ipa",
+      "size": 1101267,
       "versions": [
         {
-          "version": "1.92",
-          "buildVersion": "92",
-          "date": "2026-11-08T04:12:28+00:00",
-          "localizedDescription": "Build 92",
-          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/MyDrive-1.92-92.ipa",
-          "size": 1099734
+          "version": "1.93",
+          "buildVersion": "93",
+          "date": "2026-11-08T04:23:18+00:00",
+          "localizedDescription": "Build 93",
+          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/MyDrive-1.93-93.ipa",
+          "size": 1101267
         }
       ],
       "appPermissions": {
@@ -132,7 +132,7 @@
         {
           "version": "21.44.4",
           "buildVersion": "21.44.4",
-          "date": "2026-11-08T04:15:35+00:00",
+          "date": "2026-11-08T04:23:18+00:00",
           "localizedDescription": "Build 21.44.4",
           "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/YouTube-21.44.4.ipa",
           "size": 135343104
