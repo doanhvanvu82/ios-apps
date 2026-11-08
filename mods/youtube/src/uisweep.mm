@@ -66,7 +66,7 @@ static void ytm_hide_ad_cell_from(UIView *root) {
                          ccn, v.frame.size.width, v.frame.size.height);
             }
             // _ASCollectionViewCell: node ELM nằm trong content view. Log class
-            // node + class subview trực tiếp để phân biệt cell ad vs video.
+            // node (ASDisplayNode qua KVC 'node') + đếm subview để phân biệt.
             static NSMutableSet *nodeSeen;
             static dispatch_once_t onceNode;
             dispatch_once(&onceNode, ^{ nodeSeen = [NSMutableSet new]; });
@@ -76,11 +76,36 @@ static void ytm_hide_ad_cell_from(UIView *root) {
             }
             for (UIView *sub in cv.subviews) {
                 NSString *scn = NSStringFromClass(object_getClass(sub));
-                NSString *key = [ccn stringByAppendingFormat:@"|%@", scn];
+                id node = nil;
+                @try { node = [sub valueForKey:@"node"]; } @catch (__unused NSException *e) {}
+                NSString *ncn = node ? NSStringFromClass(object_getClass(node)) : @"(không có node)";
+                NSString *key = [ccn stringByAppendingFormat:@"|%@|%@", scn, ncn];
                 if (![nodeSeen containsObject:key]) {
                     [nodeSeen addObject:key];
-                    YTModLog(@"uisweep-probe: %@ › subview %@ (%.0fx%.0f)",
-                             ccn, scn, sub.frame.size.width, sub.frame.size.height);
+                    YTModLog(@"uisweep-probe: %@ › %@ node=%@ subviews=%lu (%.0fx%.0f)",
+                             ccn, scn, ncn,
+                             (unsigned long)cv.subviews.count,
+                             sub.frame.size.width, sub.frame.size.height);
+                }
+                // Đi sâu 1 tầng nữa qua node.subnodes: class từng subnode.
+                if (node) {
+                    @try {
+                        id subs = [node valueForKey:@"subnodes"];
+                        if ([subs isKindOfClass:[NSArray class]]) {
+                            NSMutableString *names = [NSMutableString string];
+                            NSUInteger lim = [(NSArray *)subs count] > 8 ? 8 : [(NSArray *)subs count];
+                            for (NSUInteger i = 0; i < lim; i++) {
+                                id sn = subs[i];
+                                [names appendFormat:@" %@", NSStringFromClass(object_getClass(sn))];
+                            }
+                            NSString *key2 = [key stringByAppendingFormat:@"|%@", names];
+                            if (![nodeSeen containsObject:key2]) {
+                                [nodeSeen addObject:key2];
+                                YTModLog(@"uisweep-probe: node %@ subnodes(%lu):%@",
+                                         ncn, (unsigned long)[(NSArray *)subs count], names);
+                            }
+                        }
+                    } @catch (__unused NSException *e) {}
                 }
             }
         }
