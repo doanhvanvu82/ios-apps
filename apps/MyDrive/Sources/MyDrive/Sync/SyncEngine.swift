@@ -219,8 +219,47 @@ final class SyncEngine: ObservableObject {
         guard !entries.isEmpty else { return }
         AppLog.log("sync", "▶️ Đẩy \(entries.count) thao tác…")
 
-        for entry in entries {
-            guard !Task.isCancelled else { return }
+        // Song song hoá: các op upload chỉ chờ round-trip Drive (~2 giây/op)
+        // nếu TUẦN TỰ — 3277 op sẽ mất hơn 1 tiếng mở app liên tục. Chia lô 6
+        // op chạy cùng lúc (~3 op/giây) — thứ tự trong lô không quan trọng vì
+        // mỗi op độc lập (file/folder riêng; part của cùng file nằm trong 1 op).
+        let concurrency = 6
+        // Bộ đếm op kế tiếp + cờ dừng — chia sẻ giữa 6 worker (actor-isolated).
+        let counter = OperationCounter(limit: entries.count)
+        await withTaskGroup(of: Void.self) { group in
+            for _ in 0..<concurrency {
+                group.addTask { [weak self] in
+                    await self?.processJournalWorker(entries: entries, rootIDs: rootIDs, counter: counter)
+                }
+            }
+        }
+        _ = counter
+    }
+
+    /// Bộ đếm thread-safe phân phát op kế tiếp cho các worker (nonisolated class
+    /// + lock — đơn giản, không vướng actor isolation).
+    private final class OperationCounter: @unchecked Sendable {
+        private var index = 0
+        private let limit: Int
+        private let lock = NSLock()
+        init(limit: Int) { self.limit = limit }
+        func next(_ entries: [JournalEntry]) -> JournalEntry? {
+            lock.lock()
+            defer { lock.unlock() }
+            defer { index += 1 }
+            return index < limit ? entries[index] : nil
+        }
+    }
+
+    /// 1 worker: lấy op kế tiếp, xử lý, lặp. invalidGrant → return (các worker
+    /// khác cũng sẽ gặp cùng token chết rồi tự dừng).
+    private func processJournalWorker(
+        entries: [JournalEntry],
+        rootIDs: [String: String],
+        counter: OperationCounter
+    ) async {
+        while !Task.isCancelled {
+            guard let entry = counter.next(entries) else { return }
             do {
                 try await processEntry(entry, rootIDs: rootIDs)
                 journal.complete(entry)
@@ -228,15 +267,12 @@ final class SyncEngine: ObservableObject {
             } catch let err as DriveError {
                 switch err {
                 case .quotaExceeded:
-                    // Account đầy — op upload sẽ tự chọn account khác trong lần retry.
                     journal.recordFailure(entry, error: err.localizedDescription)
                     AppLog.log("sync", "⚠️ \(entry.op.describe): không account nào đủ chỗ — thử lại lần sau")
                     await setPhase(.working("Account đầy — thử account khác…"))
-                    try? await processEntryRetryOtherAccount(entry, rootIDs: rootIDs)
                 case .invalidGrant:
                     journal.recordFailure(entry, error: err.localizedDescription)
                     await setPhase(.error("Account cần đăng nhập lại — vào tab Tài khoản."))
-                    // Không retry nữa — dừng cả vòng (các op sau cũng sẽ fail).
                     return
                 case .cancelled:
                     journal.recordFailure(entry, error: err.localizedDescription)
