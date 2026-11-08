@@ -9,20 +9,20 @@
       "developerName": "vudv",
       "subtitle": "Bản build từ máy tính",
       "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
-      "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker.png",
+      "iconURL": "https://raw.githubusercontent.com/doanhvanvu82/ios-apps/main/source/AdsBlocker.png",
       "tintColor": "#738CFF",
       "version": "1.69",
       "versionDate": "2026-11-08",
       "versionDescription": "Build 69",
-      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.69-69.ipa",
+      "downloadURL": "https://raw.githubusercontent.com/doanhvanvu82/ios-apps/main/source/AdsBlocker-1.69-69.ipa",
       "size": 2027001,
       "versions": [
         {
           "version": "1.69",
           "buildVersion": "69",
-          "date": "2026-11-08T13:52:07+00:00",
+          "date": "2026-11-08T16:15:21+00:00",
           "localizedDescription": "Build 69",
-          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.69-69.ipa",
+          "downloadURL": "https://raw.githubusercontent.com/doanhvanvu82/ios-apps/main/source/AdsBlocker-1.69-69.ipa",
           "size": 2027001
         }
       ],
@@ -37,20 +37,20 @@
       "developerName": "vudv",
       "subtitle": "Bản build từ máy tính",
       "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
-      "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub.png",
+      "iconURL": "https://raw.githubusercontent.com/doanhvanvu82/ios-apps/main/source/GameHub.png",
       "tintColor": "#738CFF",
       "version": "2.30",
       "versionDate": "2026-11-08",
       "versionDescription": "Build 130",
-      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub-2.30-130.ipa",
+      "downloadURL": "https://raw.githubusercontent.com/doanhvanvu82/ios-apps/main/source/GameHub-2.30-130.ipa",
       "size": 74762213,
       "versions": [
         {
           "version": "2.30",
           "buildVersion": "130",
-          "date": "2026-11-08T11:16:58+00:00",
+          "date": "2026-11-08T16:15:21+00:00",
           "localizedDescription": "Build 130",
-          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub-2.30-130.ipa",
+          "downloadURL": "https://raw.githubusercontent.com/doanhvanvu82/ios-apps/main/source/GameHub-2.30-130.ipa",
           "size": 74762213
         }
       ],
@@ -65,20 +65,20 @@
       "developerName": "vudv",
       "subtitle": "Bản build từ máy tính",
       "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
-      "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate.png",
+      "iconURL": "https://raw.githubusercontent.com/doanhvanvu82/ios-apps/main/source/Mangalate.png",
       "tintColor": "#738CFF",
       "version": "1.66",
       "versionDate": "2026-11-08",
       "versionDescription": "Build 66",
-      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate-1.66-66.ipa",
+      "downloadURL": "https://raw.githubusercontent.com/doanhvanvu82/ios-apps/main/source/Mangalate-1.66-66.ipa",
       "size": 283099,
       "versions": [
         {
           "version": "1.66",
           "buildVersion": "66",
-          "date": "2026-11-08T11:16:58+00:00",
+          "date": "2026-11-08T16:15:21+00:00",
           "localizedDescription": "Build 66",
-          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate-1.66-66.ipa",
+          "downloadURL": "https://raw.githubusercontent.com/doanhvanvu82/ios-apps/main/source/Mangalate-1.66-66.ipa",
           "size": 283099
         }
       ],
@@ -93,49 +93,21 @@
       "developerName": "vudv",
       "subtitle": "Bản build từ máy tính",
       "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
-      "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/MyDrive.png",
+      "iconURL": "https://raw.githubusercontent.com/doanhvanvu82/ios-apps/main/source/MyDrive.png",
       "tintColor": "#738CFF",
       "version": "2.04",
       "versionDate": "2026-11-08",
       "versionDescription": "Build 104",
-      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/MyDrive-2.04-104.ipa",
+      "downloadURL": "https://raw.githubusercontent.com/doanhvanvu82/ios-apps/main/source/MyDrive-2.04-104.ipa",
       "size": 1140069,
       "versions": [
         {
           "version": "2.04",
           "buildVersion": "104",
-          "date": "2026-11-08T11:16:58+00:00",
+          "date": "2026-11-08T16:15:21+00:00",
           "localizedDescription": "Build 104",
-          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/MyDrive-2.04-104.ipa",
+          "downloadURL": "https://raw.githubusercontent.com/doanhvanvu82/ios-apps/main/source/MyDrive-2.04-104.ipa",
           "size": 1140069
-        }
-      ],
-      "appPermissions": {
-        "entitlements": [],
-        "privacy": {}
-      }
-    },
-    {
-      "name": "YouTube",
-      "bundleIdentifier": "com.google.ios.youtube",
-      "developerName": "vudv",
-      "subtitle": "Bản build từ máy tính",
-      "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
-      "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/YouTube.png",
-      "tintColor": "#738CFF",
-      "version": "21.44.4",
-      "versionDate": "2026-11-08",
-      "versionDescription": "Build 21.44.4",
-      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/YouTube-21.44.4.ipa",
-      "size": 135361651,
-      "versions": [
-        {
-          "version": "21.44.4",
-          "buildVersion": "21.44.4",
-          "date": "2026-11-08T16:03:02+00:00",
-          "localizedDescription": "Build 21.44.4",
-          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/YouTube-21.44.4.ipa",
-          "size": 135361651
         }
       ],
       "appPermissions": {

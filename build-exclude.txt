@@ -7,3 +7,7 @@
 # trên máy; pipeline riêng dùng hook tĩnh vá binary, không phù hợp build CI.
 
 cherrytale
+
+# Từ 22:00 08/11/2026: mod chỉ build LOCAL (máy này), GitHub CI chỉ build apps.
+# Mod YouTube cần IPA gốc giải mã — đã bỏ khỏi CI, khỏi GitHub Releases.
+youtube

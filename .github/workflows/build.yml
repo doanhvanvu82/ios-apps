@@ -1,19 +1,23 @@
-name: Build apps & mods
+name: Build apps
 
 on:
   push:
     branches: [main]
     paths-ignore:
       - 'source/**'
+      - 'mods/**'
       - '**.md'
   pull_request:
+    paths-ignore:
+      - 'mods/**'
+      - '**.md'
   workflow_dispatch:
     inputs:
       scope:
-        description: 'Phạm vi build'
+        description: 'Phạm vi build (mods chỉ build local)'
         type: choice
-        options: [all, apps, mods]
-        default: all
+        options: [all, apps]
+        default: apps
       only:
         description: 'Chỉ build một mục (tên thư mục, để trống = tất cả)'
         type: string
@@ -36,9 +40,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Chạy trên runner tự đăng ký bằng cách đặt repo variable BUILD_RUNNER
-  # (vd: self-hosted). Mặc định là macOS GitHub-hosted (có Xcode + SDK sẵn).
-  SCOPE: ${{ inputs.scope || 'all' }}
+  # CI CHỈ BUILD APPS — mod chỉ build local (máy dev; IPA gốc không nằm trên CI).
+  SCOPE: ${{ inputs.scope || 'apps' }}
   ONLY: ${{ inputs.only || '' }}
   CLEAN: ${{ inputs.clean && '1' || '0' }}
   CONTINUE_ON_ERROR: '1'
@@ -139,11 +142,9 @@ jobs:
           python3 -c 'import PIL; print("Pillow", PIL.__version__)'
           command -v node >/dev/null && node --version || echo "⚠️ thiếu node (AdsBlocker bỏ qua bộ lọc mới)"
 
-      - name: Tải IPA nguồn cho mod (repo private)
-        # IPA đã giải mã không nằm trong repo (133 MB, bản quyền) — để ở
-        # doanhvanvu82/ios-mod-sources (private), tải bằng PAT trong secret
-        # SOURCE_IPA_TOKEN. Bỏ qua nếu không có secret hoặc chỉ build apps.
-        if: env.SOURCE_IPA_TOKEN != '' && env.SCOPE != 'apps'
+      - name: Tải IPA nguồn cho mod
+        # Mod chỉ build local — CI không tải IPA nguồn nữa.
+        if: false
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.SOURCE_IPA_TOKEN }}
@@ -156,21 +157,21 @@ jobs:
           echo "→ IPA nguồn: $f ($(du -h "$f" | cut -f1))"
           echo "IPA=$PWD/$f" >> "$GITHUB_ENV"
 
-      - name: Build apps & mods
+      - name: Build apps
         shell: bash
         env:
           DARWIN_SDK_URL: ${{ vars.DARWIN_SDK_URL }}
         run: |
           set -euo pipefail
-          chmod +x toolkit/build_all.sh mods/*/build.sh
-          ./toolkit/build_all.sh "$SCOPE"
+          chmod +x toolkit/build_all.sh
+          ./toolkit/build_all.sh apps
 
       - name: Liệt kê IPA
         if: always()
         shell: bash
         run: |
           shopt -s nullglob
-          files=(apps/*/xtool/*.ipa mods/*/out/*.ipa)
+          files=(apps/*/xtool/*.ipa)
           [ ${#files[@]} -gt 0 ] || { echo "⚠️ không có IPA"; exit 0; }
           printf '%s  %s\n' "$(du -h "${files[@]}" 2>/dev/null | cut -f1)" "${files[@]}" 2>/dev/null || ls -lh "${files[@]}"
 
@@ -180,7 +181,6 @@ jobs:
           name: ipa-${{ github.run_number }}
           path: |
             apps/*/xtool/*.ipa
-            mods/*/out/*.ipa
           if-no-files-found: warn
           retention-days: 30
 
