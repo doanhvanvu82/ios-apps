@@ -47,12 +47,25 @@ static BOOL ytm_label_is_ad_disclaimer(UILabel *label) {
 }
 
 static void ytm_hide_ad_cell_from(UIView *root) {
-    // DFS tìm UILabel disclaimer.
+    // DFS tìm UILabel disclaimer + probe class cell.
+    static NSMutableSet *cellClassesSeen;
+    static dispatch_once_t onceCls;
+    dispatch_once(&onceCls, ^{ cellClassesSeen = [NSMutableSet new]; });
     NSMutableArray<UIView *> *stack = [NSMutableArray arrayWithObject:root];
     while (stack.count) {
         UIView *v = stack.lastObject;
         [stack removeLastObject];
         if (v.hidden) continue;
+        // Probe: class của MỌI UICollectionViewCell — biết class cell quảng cáo
+        // khác class cell video thế nào.
+        if ([v isKindOfClass:[UICollectionViewCell class]]) {
+            NSString *ccn = NSStringFromClass(object_getClass(v));
+            if (![cellClassesSeen containsObject:ccn]) {
+                [cellClassesSeen addObject:ccn];
+                YTModLog(@"uisweep-probe: cell class %@ (%.0fx%.0f)",
+                         ccn, v.frame.size.width, v.frame.size.height);
+            }
+        }
         NSString *clsName = NSStringFromClass(object_getClass(v));
         if ([clsName containsString:@"TextNode"]) {
             // ASTextNode: text nằm ở attributedString/string của node.
