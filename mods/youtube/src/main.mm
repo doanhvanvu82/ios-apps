@@ -5,12 +5,13 @@
 
 static void ytm_did_finish_launch(void) {
     YTModLog(@"app đã launch — cài hook");
+    // Probe cài trước để ghi được element/cell của feed ngay từ lượt tải đầu.
+    YTProbeInstall();
     YTHooksInstall();
     YTDiagInstall();
     YTAdBlockInstall();
     YTPromoBlockInstall();
     YTSectionFilterInstall();
-    YTProbeInstall();
     if (YTModBool(YTKeyMenu, YES)) {
         YTMenuInstall();
     }
