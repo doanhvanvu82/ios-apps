@@ -199,6 +199,31 @@ try {
     assert.ok(kinds >= 2, `overlay reports: ${kinds}`);
   });
 
+  await check("chạm vào lớp phủ: gỡ được mà không huỷ mặc định của touchstart/pointerdown (vuốt vẫn cuộn)", async () => {
+    // Đếm preventDefault() gọi trong isolated world (cùng world với content.js) — đó là thứ iOS dùng để huỷ cú vuốt.
+    await iso(`window.__pd = []; window.__origPD = Event.prototype.preventDefault;
+      Event.prototype.preventDefault = function () { window.__pd.push(this.type); return window.__origPD.apply(this, arguments); };`);
+    // Trang chống adblock tạo lại lớp phủ liên tục: mỗi cú chạm lại rơi vào một lớp phủ mới.
+    await page(`window.__revive = setInterval(() => {
+      if (document.getElementById("swipe-overlay")) return;
+      const o = document.createElement("div"); o.id = "swipe-overlay";
+      o.style.cssText = "position:fixed;inset:0;z-index:99999;"; document.body.appendChild(o);
+    }, 50);`);
+    await sleep(300);
+    assert.equal(await page(`!!document.getElementById("swipe-overlay")`), true, "lớp phủ phải có trước khi chạm");
+
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: 400, y: 300 }] });
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await sleep(300);
+    await page(`clearInterval(window.__revive)`);
+
+    const prevented = await iso(`__pd`);
+    assert.ok(!prevented.includes("touchstart") && !prevented.includes("pointerdown"),
+      `chặn mặc định ở cú chạm làm mất thao tác cuộn: ${prevented.join(",")}`);
+    assert.ok(prevented.length >= 0);
+    await iso(`Event.prototype.preventDefault = window.__origPD; delete window.__pd;`);
+  });
+
   await check("chặn window.open khi bấm vào chữ thường (click-hijack)", async () => {
     await click("#text");
     assert.deepEqual(await page(`window.opened.at(-1)`), ["hijack", false]);

@@ -301,16 +301,22 @@
   }
 
   // Lưới an toàn khi lớp phủ xuất hiện sau thời gian quét: gỡ ngay lúc người dùng chạm vào nó.
+  // KHÔNG preventDefault cho pointerdown/touchstart: lớp phủ trong suốt phủ kín màn hình nên mọi cú chạm đều trúng
+  // nó trước, mà chặn mặc định ở touchstart/pointerdown thì iOS huỷ luôn thao tác cuộn → trang không vuốt được
+  // (chỉ bấm được). Cú chạm đã bị stopImmediatePropagation nên script của trang không thấy; chặn click là đủ để
+  // không mở link/tab quảng cáo. Listener cũng phải khai báo passive ở các loại còn lại, nếu không trình duyệt vẫn
+  // coi cú chạm là "có thể bị chặn" và hoãn việc cuộn tới khi xử lý xong.
   for (const type of ["pointerdown", "touchstart", "mousedown", "click"]) {
+    const cancelClick = type === "click";
     window.addEventListener(type, (event) => {
       if (!features.ads || siteRules.keepOverlays || !event.isTrusted) return;
       const target = event.composedPath()[0];
       const el = overlayAt(target instanceof Element ? target : target?.parentElement);
       if (!el) return;
-      event.preventDefault();
+      if (cancelClick) event.preventDefault();
       event.stopImmediatePropagation();
       removeOverlay(el, "chạm vào lớp phủ trong suốt");
-    }, { capture: true, passive: false });
+    }, { capture: true, passive: !cancelClick });
   }
 
   // ---------------------------------------------------------------- snapshot cho AI
