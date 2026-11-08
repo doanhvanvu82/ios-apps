@@ -67,21 +67,37 @@ struct FilesView: View {
     @State private var searchText = ""
     @State private var infoPath: String?
 
+    // Lịch sử điều hướng (như Files: pill ‹ › góc trái)
+    @State private var backStack: [[String]] = []
+    @State private var forwardStack: [[String]] = []
+
     private var alertDeleteTitle: String { "Xóa \(selectedPaths.count) mục?" }
+
+    /// Vào thư mục — đẩy path hiện tại vào back-stack, xoá forward (như Safari).
+    private func navigate(to newPath: [String]) {
+        guard newPath != path else { return }
+        backStack.append(path)
+        forwardStack.removeAll()
+        path = newPath
+    }
+
+    private func goBack() {
+        guard let prev = backStack.popLast() else { return }
+        forwardStack.append(path)
+        path = prev
+    }
+
+    private func goForward() {
+        guard let next = forwardStack.popLast() else { return }
+        backStack.append(path)
+        path = next
+    }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 SyncStatusBanner(status: engine.status)
                 List {
-                    if !path.isEmpty && searchText.isEmpty {
-                        Button {
-                            if !path.isEmpty { _ = path.popLast() }
-                        } label: {
-                            Label(".. Quay lại", systemImage: "chevron.left")
-                                .foregroundStyle(Theme.accent)
-                        }
-                    }
                     if path.isEmpty && searchText.isEmpty {
                         trashRow
                     }
@@ -198,6 +214,8 @@ struct FilesView: View {
                     previewURL = nil
                     shareURLs = nil
                     searchText = ""
+                    backStack.removeAll()
+                    forwardStack.removeAll()
                     path = []
                 }
             ))
@@ -208,6 +226,23 @@ struct FilesView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        // Pill ‹ › như Files: quay lại/tiến trong lịch sử thư mục.
+        ToolbarItem(placement: .topBarLeading) {
+            HStack(spacing: 2) {
+                Button {
+                    goBack()
+                } label: {
+                    Image(systemName: "chevron.left")
+                }
+                .disabled(backStack.isEmpty || isSelecting || !searchText.isEmpty)
+                Button {
+                    goForward()
+                } label: {
+                    Image(systemName: "chevron.right")
+                }
+                .disabled(forwardStack.isEmpty || isSelecting || !searchText.isEmpty)
+            }
+        }
         ToolbarItem(placement: .topBarLeading) {
             if engine.status.isWorking {
                 ProgressView()
@@ -401,7 +436,7 @@ struct FilesView: View {
                     .frame(width: 28)
                 if entry.isDirectory {
                     Button {
-                        path = comps
+                        navigate(to: comps)
                     } label: {
                         HStack {
                             Text(entry.name)

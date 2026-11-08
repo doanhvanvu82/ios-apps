@@ -28,15 +28,22 @@ struct QuickLookView: UIViewControllerRepresentable {
         context.coordinator.onDone = onDone
         let vc = QLPreviewController()
         vc.dataSource = context.coordinator
-        // Nút đóng = X ở BÊN TRÁI (như app Files). Đừng thêm gì bên phải — QL đã
-        // có Share + List, thêm nữa bị iOS gộp thành menu "…" 3 chấm.
+        vc.delegate = context.coordinator
+        // Nút đóng = X ở BÊN TRÁI (như app Files).
         vc.navigationItem.leftBarButtonItem = UIBarButtonItem(
             image: UIImage(systemName: "xmark"),
             style: .plain,
             target: context.coordinator,
             action: #selector(Coordinator.doneTapped)
         )
-        return UINavigationController(rootViewController: vc)
+        let nav = UINavigationController(rootViewController: vc)
+        nav.modalPresentationStyle = .fullScreen
+        // Như Files: chạm 1 lần ẩn/hiện toàn bộ chrome (X, List, status bar).
+        nav.hidesBarsOnTap = true
+        // Di chuyển nút List của QL sang BÊN PHẢI (mặc định QL đặt cạnh X bên trái).
+        context.coordinator.hostVC = vc
+        DispatchQueue.main.async { context.coordinator.moveListButtonToRight() }
+        return nav
     }
 
     func updateUIViewController(_ nav: UINavigationController, context: Context) {
@@ -46,20 +53,48 @@ struct QuickLookView: UIViewControllerRepresentable {
         if coordinator.items != order {
             coordinator.items = order
             (nav.viewControllers.first as? QLPreviewController)?.reloadData()
+            DispatchQueue.main.async { coordinator.moveListButtonToRight() }
         }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(items: orderedURLs, onDone: onDone) }
 
-    final class Coordinator: NSObject, QLPreviewControllerDataSource {
+    final class Coordinator: NSObject, QLPreviewControllerDataSource, QLPreviewControllerDelegate {
         var items: [URL]
         var onDone: () -> Void
+        weak var hostVC: QLPreviewController?
         init(items: [URL], onDone: @escaping () -> Void) {
             self.items = items
             self.onDone = onDone
         }
 
         @objc func doneTapped() { onDone() }
+
+        /// QL dựng nút List trễ (khi có ≥2 item) — tìm trong subviews và di chuyển
+        /// sang phải: set trailing anchor của nút cuối với layout guide của bar.
+        func moveListButtonToRight() {
+            guard let vc = hostVC else { return }
+            // QLPreviewController đặt các bar button trong _QLPreviewInternal...
+            // Cách chắc ăn: quét toàn bộ UIBarButtonItem trong navigation bar
+            // theo title/image "list.bullet" rồi đảo vị trí trái↔phải.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                self?.moveListButtonToRightOnce()
+            }
+        }
+
+        private func moveListButtonToRightOnce() {
+            guard let vc = hostVC, vc.navigationItem.leftBarButtonItems?.count ?? 0 > 1 else { return }
+            // Nếu bar trái có >1 item (X + List) → chuyển item thứ 2 sang phải.
+            let items = vc.navigationItem.leftBarButtonItems ?? []
+            if items.count > 1 {
+                vc.navigationItem.leftBarButtonItems = [items[0]]
+                var right = vc.navigationItem.rightBarButtonItems ?? []
+                if !right.contains(items[1]) {
+                    right.append(items[1])
+                    vc.navigationItem.rightBarButtonItems = right
+                }
+            }
+        }
 
         func numberOfPreviewItems(in controller: QLPreviewController) -> Int { items.count }
 
