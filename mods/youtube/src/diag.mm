@@ -5,6 +5,7 @@
 // chứa auth, và các chuỗi ASCII trong body (client name/version nằm ở đó).
 // Bỏ hẳn file này khi đã xác định nguyên nhân.
 #import "common.h"
+#import "hooks.h"
 #import <objc/runtime.h>
 
 static BOOL g_diagOn = YES;
@@ -76,7 +77,16 @@ static NSInteger ytm_statusCode(NSHTTPURLResponse *self, SEL _cmd) {
         if (ytm_isApiHost(url)) {
             NSString *q = url.query ?: @"";
             if (q.length > 300) q = [q substringToIndex:300];
-            YTModLog(@"[net] ← %ld %@%@?%@", (long)code, url.host, url.path, q);
+            NSMutableString *hs = [NSMutableString string];
+            [self.allHeaderFields enumerateKeysAndObjectsUsingBlock:^(id k, id v, BOOL *stop) {
+                NSString *lk = [k description].lowercaseString;
+                if ([lk containsString:@"set-cookie"] || [lk containsString:@"auth"] ||
+                    [lk containsString:@"token"]) {
+                    return;
+                }
+                [hs appendFormat:@" %@=%@", k, v];
+            }];
+            YTModLog(@"[net] ← %ld %@%@?%@  resp:%@", (long)code, url.host, url.path, q, hs);
         }
     }
     return code;
