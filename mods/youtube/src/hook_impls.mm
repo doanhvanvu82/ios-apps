@@ -108,18 +108,12 @@ static id ytm_inPlayerSlot(id self, SEL _cmd, id bytesSlot, id brk, id cpn, id a
 }
 
 // ---------------------------------------------------------------------------
-// Phát nền / PiP
+// Phát nền (khoá máy vẫn phát tiếng)
 // ---------------------------------------------------------------------------
 static IMP _orig_isBackgroundable;
 static BOOL ytm_isBackgroundable(id self, SEL _cmd) {
     if (YTBackgroundEnabled()) return YES;
     return ((BOOL (*)(id, SEL))_orig_isBackgroundable)(self, _cmd);
-}
-
-static IMP _orig_isPlayableInPiPBySettings;
-static BOOL ytm_isPlayableInPiPBySettings(id self, SEL _cmd) {
-    if (YTBackgroundEnabled()) return YES;
-    return ((BOOL (*)(id, SEL))_orig_isPlayableInPiPBySettings)(self, _cmd);
 }
 
 static IMP _orig_isPlayableInBackground;
@@ -128,28 +122,37 @@ static BOOL ytm_isPlayableInBackground(id self, SEL _cmd) {
     return ((BOOL (*)(id, SEL))_orig_isPlayableInBackground)(self, _cmd);
 }
 
+static IMP _orig_setAllowsBackgroundPlayback;
+static void ytm_setAllowsBackgroundPlayback(id self, SEL _cmd, BOOL v) {
+    if (YTBackgroundEnabled()) v = YES;
+    ((void (*)(id, SEL, BOOL))_orig_setAllowsBackgroundPlayback)(self, _cmd, v);
+}
+
+// ---------------------------------------------------------------------------
+// PiP (rời app thì thu nhỏ cửa sổ phát)
+// ---------------------------------------------------------------------------
+static IMP _orig_isPlayableInPiPBySettings;
+static BOOL ytm_isPlayableInPiPBySettings(id self, SEL _cmd) {
+    if (YTPiPEnabled()) return YES;
+    return ((BOOL (*)(id, SEL))_orig_isPlayableInPiPBySettings)(self, _cmd);
+}
+
 static IMP _orig_isPlayableInPiP;
 static BOOL ytm_isPlayableInPiP(id self, SEL _cmd) {
-    if (YTBackgroundEnabled()) return YES;
+    if (YTPiPEnabled()) return YES;
     return ((BOOL (*)(id, SEL))_orig_isPlayableInPiP)(self, _cmd);
 }
 
 static IMP _orig_isPipOffByDefault;
 static BOOL ytm_isPipOffByDefault(id self, SEL _cmd) {
-    if (YTBackgroundEnabled()) return NO;
+    if (YTPiPEnabled()) return NO;
     return ((BOOL (*)(id, SEL))_orig_isPipOffByDefault)(self, _cmd);
 }
 
 static IMP _orig_isPlayableInPiPPlayerResponse;
 static BOOL ytm_isPlayableInPiPPlayerResponse(id self, SEL _cmd) {
-    if (YTBackgroundEnabled()) return YES;
+    if (YTPiPEnabled()) return YES;
     return ((BOOL (*)(id, SEL))_orig_isPlayableInPiPPlayerResponse)(self, _cmd);
-}
-
-static IMP _orig_setAllowsBackgroundPlayback;
-static void ytm_setAllowsBackgroundPlayback(id self, SEL _cmd, BOOL v) {
-    if (YTBackgroundEnabled()) v = YES;
-    ((void (*)(id, SEL, BOOL))_orig_setAllowsBackgroundPlayback)(self, _cmd, v);
 }
 
 // ---------------------------------------------------------------------------
@@ -184,11 +187,15 @@ const YTMHook YTM_HOOKS[] = {
      "inPlayerSlotFromPlayerBytesSlot:adBreak:contentCPN:ad:playerResponse:gaplessContext:",
      "@64@0:8@16@24@32@40@48@56", (IMP)ytm_inPlayerSlot, &_orig_inPlayerSlot, "adb: inPlayerSlot=nil"},
 
-    // Phát nền / PiP
+    // Phát nền
     {"YTIPlayabilityStatus", "isPlayableInBackground", "B16@0:8", (IMP)ytm_isPlayableInBackground, &_orig_isPlayableInBackground, "bg: playableInBackground=YES"},
-    {"YTIPlayabilityStatus", "isPlayableInPictureInPicture", "B16@0:8", (IMP)ytm_isPlayableInPiP, &_orig_isPlayableInPiP, "bg: playableInPiP=YES"},
-    {"YTPlayerResponse", "isPipOffByDefault", "B16@0:8", (IMP)ytm_isPipOffByDefault, &_orig_isPipOffByDefault, "bg: pipOffByDefault=NO"},
-    {"YTPlayerResponse", "isPlayableInPictureInPicture", "B16@0:8", (IMP)ytm_isPlayableInPiPPlayerResponse, &_orig_isPlayableInPiPPlayerResponse, "bg: playerResponse PiP=YES"},
     {"HAMPlayer", "setAllowsBackgroundPlayback:", "v20@0:8B16", (IMP)ytm_setAllowsBackgroundPlayback, &_orig_setAllowsBackgroundPlayback, "bg: HAMPlayer allows=YES"},
+    {"YTBackgroundabilityPolicyImpl", "isBackgroundableByUserSettings", "B16@0:8", (IMP)ytm_isBackgroundable, &_orig_isBackgroundable, "bg: backgroundableBySettings=YES"},
+
+    // PiP
+    {"YTIPlayabilityStatus", "isPlayableInPictureInPicture", "B16@0:8", (IMP)ytm_isPlayableInPiP, &_orig_isPlayableInPiP, "pip: playableInPiP=YES"},
+    {"YTPlayerResponse", "isPipOffByDefault", "B16@0:8", (IMP)ytm_isPipOffByDefault, &_orig_isPipOffByDefault, "pip: pipOffByDefault=NO"},
+    {"YTPlayerResponse", "isPlayableInPictureInPicture", "B16@0:8", (IMP)ytm_isPlayableInPiPPlayerResponse, &_orig_isPlayableInPiPPlayerResponse, "pip: playerResponse PiP=YES"},
+    {"YTBackgroundabilityPolicyImpl", "isPlayableInPictureInPictureByUserSettings", "B16@0:8", (IMP)ytm_isPlayableInPiPBySettings, &_orig_isPlayableInPiPBySettings, "pip: playableBySettings=YES"},
 };
 const int YTM_HOOK_COUNT = (int)(sizeof(YTM_HOOKS) / sizeof(YTM_HOOKS[0]));

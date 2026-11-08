@@ -14,7 +14,8 @@ extern "C" {
 
 // Khóa NSUserDefaults (suite vn.vudv.youtube.mod).
 extern NSString *const YTKeyAdsOff;     // chặn quảng cáo
-extern NSString *const YTKeyBackground; // phát nền / PiP
+extern NSString *const YTKeyBackground; // phát nền (khoá máy vẫn nghe)
+extern NSString *const YTKeyPiP;        // tự bật PiP khi về màn hình chính
 extern NSString *const YTKeyMenu;       // hiện nút menu nổi
 
 // Cài hook. An toàn khi gọi nhiều lần (chỉ cài lần đầu).
@@ -40,6 +41,7 @@ typedef struct {
 // Trạng thái công tắc hiện tại (dùng trong thân hook).
 BOOL YTAdsOffEnabled(void);
 BOOL YTBackgroundEnabled(void);
+BOOL YTPiPEnabled(void);
 
 // Bảng hook do hook_impls.mm định nghĩa.
 extern const YTMHook YTM_HOOKS[];
@@ -62,6 +64,9 @@ void YTSectionFilterInstall(void);
 
 // Chẩn đoán element/cell quảng cáo của feed (mod 1.6).
 void YTProbeInstall(void);
+
+// Tự bật PiP khi app rời foreground (chỉ khi bật công tắc PiP).
+void YTAutoPiPInstall(void);
 
 #ifdef __cplusplus
 }

@@ -51,7 +51,7 @@ static UISwitch *YTMakeSwitch(BOOL on, id target, SEL action) {
 
 - (void)buildPanel {
     CGFloat w = 250;
-    UIView *p = [[UIView alloc] initWithFrame:CGRectMake(0, 0, w, 200)];
+    UIView *p = [[UIView alloc] initWithFrame:CGRectMake(0, 0, w, 226)];
     p.backgroundColor = [UIColor colorWithWhite:0.10 alpha:0.97];
     p.layer.cornerRadius = 14;
     p.layer.masksToBounds = YES;
@@ -80,16 +80,23 @@ static UISwitch *YTMakeSwitch(BOOL on, id target, SEL action) {
     adsSwitch.frame = CGRectMake(w - 16 - 51, 76, 51, 31);
     [p addSubview:adsSwitch];
 
-    UILabel *bg = YTLabel(@"Phát nền / PiP", [UIFont systemFontOfSize:14], UIColor.whiteColor);
-    bg.frame = CGRectMake(16, 124, 150, 20);
+    UILabel *bg = YTLabel(@"Phát nền", [UIFont systemFontOfSize:14], UIColor.whiteColor);
+    bg.frame = CGRectMake(16, 120, 150, 20);
     [p addSubview:bg];
     UISwitch *bgSwitch = YTMakeSwitch(YTModBool(YTKeyBackground, YES), self, @selector(bgChanged:));
-    bgSwitch.frame = CGRectMake(w - 16 - 51, 120, 51, 31);
+    bgSwitch.frame = CGRectMake(w - 16 - 51, 116, 51, 31);
     [p addSubview:bgSwitch];
+
+    UILabel *pip = YTLabel(@"PiP khi thoát app", [UIFont systemFontOfSize:14], UIColor.whiteColor);
+    pip.frame = CGRectMake(16, 160, 160, 20);
+    [p addSubview:pip];
+    UISwitch *pipSwitch = YTMakeSwitch(YTModBool(YTKeyPiP, YES), self, @selector(pipChanged:));
+    pipSwitch.frame = CGRectMake(w - 16 - 51, 156, 51, 31);
+    [p addSubview:pipSwitch];
 
     UILabel *note = YTLabel(@"Lưu ngay lập tức · áp dụng không cần khởi động lại",
                             [UIFont systemFontOfSize:10], [UIColor colorWithWhite:1 alpha:0.45]);
-    note.frame = CGRectMake(16, 174, w - 32, 14);
+    note.frame = CGRectMake(16, 200, w - 32, 14);
     [p addSubview:note];
 
     self.panel = p;
@@ -108,10 +115,16 @@ static UISwitch *YTMakeSwitch(BOOL on, id target, SEL action) {
     YTHooksApplyConfig();
 }
 
+- (void)pipChanged:(UISwitch *)s {
+    YTModSetBool(YTKeyPiP, s.on);
+    YTModFlush();
+    YTHooksApplyConfig();
+}
+
 - (void)positionInWindow:(UIWindow *)window {
     CGSize size = window.bounds.size;
     if (!self.panel) [self buildPanel];
-    self.panel.frame = CGRectMake(size.width - 250 - 12, 60, 250, 200);
+    self.panel.frame = CGRectMake(size.width - 250 - 12, 60, 250, 226);
     [window addSubview:self.panel];
 
     if (!g_floatingButton) {

@@ -12,6 +12,7 @@ static void ytm_did_finish_launch(void) {
     YTAdBlockInstall();
     YTPromoBlockInstall();
     YTSectionFilterInstall();
+    YTAutoPiPInstall();
     if (YTModBool(YTKeyMenu, YES)) {
         YTMenuInstall();
     }

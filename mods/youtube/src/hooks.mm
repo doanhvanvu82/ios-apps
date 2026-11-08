@@ -6,6 +6,7 @@
 
 NSString *const YTKeyAdsOff = @"ads_off";
 NSString *const YTKeyBackground = @"background";
+NSString *const YTKeyPiP = @"pip";
 NSString *const YTKeyMenu = @"menu_visible";
 
 #ifndef YT_VERSION_TAG
@@ -16,6 +17,7 @@ NSString *const YTKeyMenu = @"menu_visible";
 // YTHooksApplyConfig() để cập nhật biến.
 static volatile BOOL g_adsOff = YES;
 static volatile BOOL g_background = YES;
+static volatile BOOL g_pip = YES;
 
 static int g_installed = 0;
 static int g_failed = 0;
@@ -61,6 +63,7 @@ int YTHooksInstall(void) {
     dispatch_once(&once, ^{
         g_adsOff = YTModBool(YTKeyAdsOff, YES);
         g_background = YTModBool(YTKeyBackground, YES);
+        g_pip = YTModBool(YTKeyPiP, YES);
 
         for (int i = 0; i < YTM_HOOK_COUNT; i++) {
             if (ytm_swizzle(&YTM_HOOKS[i])) {
@@ -81,9 +84,11 @@ int YTHooksFailed(void) { return g_failed; }
 
 BOOL YTAdsOffEnabled(void) { return g_adsOff; }
 BOOL YTBackgroundEnabled(void) { return g_background; }
+BOOL YTPiPEnabled(void) { return g_pip; }
 
 void YTHooksApplyConfig(void) {
     g_adsOff = YTModBool(YTKeyAdsOff, YES);
     g_background = YTModBool(YTKeyBackground, YES);
-    YTModLog(@"config: ads_off=%d background=%d", g_adsOff, g_background);
+    g_pip = YTModBool(YTKeyPiP, YES);
+    YTModLog(@"config: ads_off=%d background=%d pip=%d", g_adsOff, g_background, g_pip);
 }

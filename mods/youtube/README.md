@@ -25,9 +25,14 @@ Tiêm dylib ObjC++ vào IPA YouTube **đã giải mã** (bản dump từ thiết
   `promo: CHẶN`.
 - **Menu YT**: hiện `YT <phiên bản app> · mod <MOD_VERSION>` và `build <nhãn giờ>`
   để biết đang chạy bản mới hay cũ (version app luôn là `21.44.4`).
-- **Phát nền / PiP**: ép `isBackgroundableByUserSettings` /
-  `isPlayableInBackground` / `isPlayableInPictureInPicture` = `YES`,
-  `HAMPlayer.setAllowsBackgroundPlayback:` = `YES`, tắt `isPipOffByDefault`.
+- **Phát nền** (toggle riêng): ép `isBackgroundableByUserSettings` /
+  `isPlayableInBackground` = `YES`, `HAMPlayer.setAllowsBackgroundPlayback:`
+  = `YES` → khoá máy vẫn nghe tiếng.
+- **PiP khi thoát app** (toggle riêng): ép `isPlayableInPictureInPicture` /
+  `isPlayableInPictureInPictureByUserSettings` = `YES`, tắt `isPipOffByDefault`;
+  `autopip.mm` ghi lại `YTPlayerPIPController` đang phát rồi gọi
+  `maybeTogglePictureInPicture` lúc `UIApplicationWillResignActive` → bấm Home là
+  video thu nhỏ thành PiP.
 - Menu nổi nhỏ (nút **YT** góc phải dưới) để bật/tắt từng tính năng, lưu vào
   `NSUserDefaults` suite `vn.vudv.youtube.mod`.
 
@@ -48,6 +53,7 @@ mods/youtube/
 │   ├── adblock.mm        chặn ads player/InnerTube
 │   ├── promo.mm          chặn ads feed + promo/upsell Premium
 │   ├── sectionfilter.mm  lọc entry quảng cáo/promo khỏi section renderers
+│   ├── autopip.mm        tự bật PiP khi rời foreground
 │   ├── hook_impls.mm     thân hook + YTM_HOOKS (class/selector/type encoding)
 │   ├── hooks.mm          swizzling bằng ObjC runtime, đọc cấu hình
 │   ├── menu.mm           menu nổi UIKit
