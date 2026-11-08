@@ -42,6 +42,11 @@ PARTIAL=0
 # ---------------------------------------------------------------------------
 echo "→ Sinh source.json (base: $BASE)…"
 rm -rf "$OUT_DIR"
+# Mod KHÔNG BAO GIỜ lên GitHub (CI chỉ build apps): lọc IPA mod khỏi DIST nếu
+# lỡ truyền vào (file IPA mod nằm trong mods/<tên>/out/).
+if [ -n "${DIST_DIR:-}" ]; then
+    find "$DIST_DIR" -name '*.ipa' -path '*mod*' -delete 2>/dev/null || true
+fi
 DIST_ARGS=()
 if [ -n "${DIST_DIR:-}" ]; then
     DIST_ARGS=(--dist "$DIST_DIR")
