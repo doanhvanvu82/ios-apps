@@ -270,7 +270,8 @@
       if (el.hasAttribute(OWN_ATTR)) return null;
       const f = featuresOf(el, el.getBoundingClientRect(), getComputedStyle(el));
       if (isInvisibleOverlay(f)) {
-        console.log("[AdsBlocker] overlayAt: found", el.tagName, "zIndex=", f.zIndex, "fixed=", f.fixed, "absolute=", f.absolute, "transparent=", f.transparent);
+        log("overlayAt: found", el.tagName, "zIndex=", f.zIndex, "fixed=", f.fixed, "absolute=", f.absolute, "transparent=", f.transparent);
+        logNative("overlay", `found ${el.tagName} zIndex=${f.zIndex} fixed=${f.fixed} absolute=${f.absolute}`);
         return el;
       }
     }
@@ -278,7 +279,8 @@
   }
 
   function removeOverlay(el, how) {
-    console.log("[AdsBlocker] removeOverlay:", how, "el:", el?.tagName, el?.className?.slice(0, 50));
+    log("removeOverlay:", how, "el:", el?.tagName, el?.className?.slice(0, 50));
+    logNative("overlay", `remove ${how}: ${el?.tagName} ${(el?.className || '').slice(0, 30)}`);
     reportBlocked("overlay", el.querySelector("a[href]")?.href || el.getAttribute("href") || "", how);
     el.remove();
   }
@@ -294,7 +296,7 @@
         if (el) { removeOverlay(el, "lớp phủ trong suốt"); removed++; }
       }
     }
-    if (removed) console.log("[AdsBlocker] sweepOverlays: removed", removed, "overlays");
+    if (removed) { log("sweepOverlays: removed", removed, "overlays"); logNative("overlay", `sweep removed ${removed}`); }
   }
 
   let sweepTimer = 0;
@@ -314,7 +316,14 @@
   // không mở link/tab quảng cáo. Listener cũng phải khai báo passive ở các loại còn lại, nếu không trình duyệt vẫn
   // coi cú chạm là "có thể bị chặn" và hoãn việc cuộn tới khi xử lý xong.
   const DEBUG = false; // Bật true để hiển thị log debug trong Safari Developer Tools
-  const log = (...args) => { if (DEBUG) console.log("[AdsBlocker]", ...args); };
+  const log = (...args) => {
+    const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+    if (DEBUG) console.log("[AdsBlocker]", msg);
+  };
+  // Log quan trọng gửi về native (chỉ overlayAt, removeOverlay, guard)
+  const logNative = (category, text) => {
+    try { browser.runtime.sendNativeMessage("application.id", { action: "log", category, text }); } catch {}
+  };
   for (const type of ["pointerdown", "touchstart", "mousedown", "click"]) {
     const cancelClick = type === "click";
     window.addEventListener(type, (event) => {
@@ -323,6 +332,7 @@
       const el = overlayAt(target instanceof Element ? target : target?.parentElement);
       if (!el) return;
       log(`Guard bắt ${type} trên overlay, cancelClick=${cancelClick}, preventDefault=${cancelClick}`);
+      logNative("guard", `bắt ${type} cancelClick=${cancelClick}`);
       if (cancelClick) event.preventDefault();
       event.stopImmediatePropagation();
       removeOverlay(el, "chạm vào lớp phủ trong suốt");
@@ -675,6 +685,7 @@
   // ---------------------------------------------------------------- khởi động
 
   console.log("[AdsBlocker] Content script loaded, host:", HOST, "isTop:", IS_TOP);
+  log("Content script loaded, host:", HOST, "isTop:", IS_TOP);
   loadConfig();
   document.addEventListener("DOMContentLoaded", () => {
     applyConfig();

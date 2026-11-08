@@ -33,6 +33,12 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
 
     private static func handle(_ message: [String: Any]) async throws -> [String: Any] {
         switch message["action"] as? String {
+        case "log":
+            if let category = message["category"] as? String, let text = message["text"] as? String {
+                AppLog.log(category, text)
+            }
+            return ["ok": true]
+
         case "getSettings":
             return ["ok": true, "hasKey": Settings.apiKey != nil, "model": Settings.model ?? ""]
 
