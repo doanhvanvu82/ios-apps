@@ -48,6 +48,9 @@ extern const int YTM_HOOK_COUNT;
 // Menu nổi (gọi trên main thread, sau khi có window).
 void YTMenuInstall(void);
 
+// Ghi request/response mạng ra log (chẩn đoán lỗi tải dữ liệu).
+void YTDiagInstall(void);
+
 #ifdef __cplusplus
 }
 #endif
