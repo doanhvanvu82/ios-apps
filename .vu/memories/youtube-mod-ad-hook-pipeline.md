@@ -1,13 +1,13 @@
 ---
-description: "YouTube mod: đường ads feed và bẫy type encoding"
+description: "YouTube mod: cách chặn ads từ gốc"
 evidence:
   - path: "mods/youtube/src/adblock.mm"
-    quote: "//  - TUYỆT ĐỐI không trả nil từ hàm init/create/slotFrom… có kiểu trả object:"
+    quote: "// CÁCH CHÍNH (học từ YTLite, tweak còn bảo trì cho bản YouTube hiện tại):"
   - path: "mods/youtube/src/adblock.mm"
-    quote: "//    caller dùng kết quả ngay → EXC_BAD_ACCESS tại objc_retain"
+    quote: "ADHOOK(\"YTAdsInnerTubeContextDecoratorImpl\", \"decorateContext:serviceType:\","
   - path: "mods/youtube/src/adblock.mm"
-    quote: "ADHOOK(\"YTAdElementsCellAPIImpl\", \"didLoadRenderer:\", YTMAdSkip, 1,"
+    quote: "ADHOOK(\"YTAccountScopedAdsInnerTubeContextDecorator\", \"decorateContext:serviceType:\","
   - path: "mods/youtube/src/adblock.mm"
-    quote: "ADHOOK(\"YTAdElementsCellExternallyManagedSlotAdapterImpl\",\n           \"didBindSlotData:layoutData:\", YTMAdSkip, 2,"
+    quote: "//  - TUYỆT ĐỐI không trả nil từ hàm init/create/slotFrom… trả object: caller"
 ---
-Mod YouTube 21.44.4 không chặn được ads bằng cờ YTIPlayerResponse; ads feed đi qua YTAdElementsCellAPIImpl.didLoadRenderer: → YTAdElementsCellExternallyManagedSlotAdapterImpl.didBindSlotData:layoutData:. Tuyệt đối không trả nil từ hàm trả object của pipeline ad (slot factory/init/create) vì caller dùng ngay → EXC_BAD_ACCESS tại objc_retain; chỉ bỏ thân hàm void hoặc cho getter trả @[]/nil. Luôn đối chiếu type encoding thật trong binary trước khi hook (hàm naive void-ify có thể làm mất giá trị trả về).
+Mod YouTube 21.44.4 chặn ads hiệu quả nhất bằng cách học YTLite: bỏ decorate context quảng cáo khi gửi InnerTube (YTAdsInnerTubeContextDecoratorImpl, YTAccountScopedAdsInnerTubeContextDecorator: decorateContext:serviceType:, decorateContextWithAdShieldSignals:, decorateContextWithIDFA:) để server không trả ad slot/preroll. Không trả nil từ hàm trả object của pipeline ad (slot factory/init) vì caller dùng ngay → EXC_BAD_ACCESS; chỉ bỏ thân hàm void hoặc getter trả @[]/nil.

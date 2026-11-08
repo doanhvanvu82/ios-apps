@@ -1,11 +1,11 @@
 ---
-description: "MyDrive: kiến trúc upload nền background URLSession"
+description: "MyDrive: worker song song + khóa IndexStore + complete trễ"
 evidence:
-  - path: "apps/MyDrive/Sources/MyDrive/Sync/BackgroundUploader.swift"
-    quote: "/// Upload nền THẬT qua **URLSession background** — daemon `nsurlsessiond` của\n/// iOS giữ luồng đẩy dữ liệu: kill app vẫn tiếp tục, mất mạng tự resume, xong\n/// hệ thống đánh thức app để ghi kết quả vào index."
-  - path: "apps/MyDrive/Sources/MyDrive/MyDriveApp.swift"
-    quote: "        BackgroundUploader.pendingCompletion = completionHandler\n        _ = BackgroundUploader.shared   // ép dựng session + loadJobs"
+  - path: "apps/MyDrive/Sources/MyDrive/Sync/IndexStore.swift"
+    quote: "private let dictLock = NSLock()\n\n    /// Đọc snapshot an toàn trong lock.\n    private func withDict<T>(_ body: (inout [String: IndexNode]) -> T) -> T {\n        dictLock.lock()\n        defer { dictLock.unlock() }\n        return body(&index)\n    }"
   - path: "apps/MyDrive/Sources/MyDrive/Sync/SyncEngine.swift"
-    quote: "        // 1) Nếu chưa có placement (node mới HOẶC node có parts nil — UI upsert\n        //    trước khi op chạy) → đặt account(s) theo dung lượng. Trước đây chỉ\n        //    kiểm tra node == nil → parts nil thoát im lặng, op bị coi là xong"
+    quote: "if let parts = index.node(at: p)?.parts, !parts.isEmpty {\n                        isFullyUploaded = parts.allSatisfy { $0.driveFileId != nil }\n                    } else {\n                        isFullyUploaded = false\n                    }"
+  - path: "apps/MyDrive/Sources/MyDrive/Sync/Journal.swift"
+    quote: "func completeUpload(path: String) {\n        queue.async { [weak self] in\n            guard let self else { return }\n            self.entries.removeAll { e in\n                if case let .uploadFile(p) = e.op { return p == path }"
 ---
-MyDrive upload nền: part ≥5MB đi qua background URLSession ("vn.vudv.mydrive.upload", daemon nsurlsessiond — kill app vẫn upload). Luồng: DriveClient.startBackgroundUpload mở resumable session lấy uploadURL → BackgroundUploader.shared.start(job) với file part trên tmp → daemon PUT → didCompleteWithError đọc JSON Drive lấy fileID → IndexStore.updatePart + triggerSync. AppDelegate cài handleEventsForBackgroundURLSession (giữ completionHandler vào BackgroundUploader.pendingCompletion). Job persist ở MyDrive.meta/bg-jobs.json; loadJobs re-start job có file part còn. Part <5MB vẫn upload trong app. Bẫy: uploadFile phải đặt placement khi parts nil/rỗng (không chỉ node==nil) — UI upsert node trước khi op chạy, ngược lại op "xong" im lặng không upload gì (bug 07/11/2026).
+MyDrive sync: journal đẩy SONG SONG 6 worker (1.87) — do đó IndexStore PHẢI khóa dictionary (dictLock NSLock, thêm 1.89) cho MỌI đọc/ghi: 6 worker cùng mutate Dictionary không khóa = data race crash EXC_BAD_ACCESS (gặp thật khi đẩy ~700 file). Op uploadFile chỉ complete khi MỌI part có driveFileId; callback nền (finishJob) gọi Journal.completeUpload khi file đủ part — không complete ngay khi giao nền (tránh requeue trùng). adoptOrphanLocalFiles DEDUPE theo journal — cài lại + copy lại không sinh op trùng.
