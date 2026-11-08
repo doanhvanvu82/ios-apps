@@ -89,6 +89,10 @@ mods/youtube/build.sh --check  # exit 3 nếu thiếu IPA gốc (build_all.sh d�
   (`publish=true`). IPA YouTube gốc giữ ở repo private `doanhvanvu82/ios-mod-sources`, CI tải bằng
   `secrets.SOURCE_IPA_TOKEN` (hoặc đặt `secrets.YOUTUBE_IPA_URL`).
 - Log trên máy: dylib ghi `Documents/Logs/<ngày>.log`, lấy bằng `toolkit/pull_app_logs.sh <bundleID>`.
+- **Mod IPA có appex: đổi bundle id của appex theo app chính và xoá mọi `_CodeSignature` cũ.**
+  Apple bắt buộc bundle id appex bắt đầu bằng bundle id app (`<bid>.<suffix>`); để `com.google.ios.youtube.*`
+  khi app chính đã đổi thành `vn.vudv.youtube.mod` thì `installd` từ chối cài. `_CodeSignature` của từng
+  appex/framework còn chứa hash bản gốc cũng làm hỏng chữ ký. Xem `mods/youtube/build.sh` › `patch_app`.
 
 ## Cài lên iPhone
 

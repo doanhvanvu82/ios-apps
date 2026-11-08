@@ -181,9 +181,10 @@ patch_app() {
   python3 "$HERE/tools/inject_dylib.py" "$bin" "@executable_path/Frameworks/$DYLIB_NAME"
 
   "$PY" - "$app/Info.plist" "$bid" "$disp" <<'PY'
-import plistlib, sys, time
+import plistlib, sys, time, glob, os
 p, bid, disp = sys.argv[1], sys.argv[2], sys.argv[3]
 d = plistlib.load(open(p, 'rb'))
+old_id = d.get("CFBundleIdentifier", "")
 d["CFBundleIdentifier"] = bid
 d["CFBundleDisplayName"] = disp
 # Mỗi lần build tăng CFBundleVersion (Ksign dựa vào đó để nhận cập nhật).
@@ -197,9 +198,30 @@ d["UIFileSharingEnabled"] = True
 d["LSSupportsOpeningDocumentsInPlace"] = True
 plistlib.dump(d, open(p, 'wb'), fmt=plistlib.FMT_BINARY)
 print("→ Info.plist: id=%s name=%s build=%s" % (bid, disp, new))
+
+# App extension BẮT BUỘC có bundle id bắt đầu bằng bundle id app chính, nếu
+# không installd từ chối cài: com.google.ios.youtube.ShareExtension → <bid>.ShareExtension.
+appdir = os.path.dirname(os.path.abspath(p))
+for ep in sorted(glob.glob(os.path.join(appdir, "PlugIns", "*.appex", "Info.plist"))):
+    e = plistlib.load(open(ep, 'rb'))
+    eid = e.get("CFBundleIdentifier", "")
+    if eid.startswith(old_id + "."):
+        suffix = eid[len(old_id) + 1:]
+    else:
+        suffix = eid.rsplit(".", 1)[-1]
+    eid_new = "%s.%s" % (bid, suffix)
+    e["CFBundleIdentifier"] = eid_new
+    # Version của appex phải khớp app chính.
+    e["CFBundleShortVersionString"] = d.get("CFBundleShortVersionString", e.get("CFBundleShortVersionString"))
+    e["CFBundleVersion"] = new
+    plistlib.dump(e, open(ep, 'wb'), fmt=plistlib.FMT_BINARY)
+    print("   appex: %s → %s" % (eid, eid_new))
 PY
 
-  rm -rf "$app/_CodeSignature" "$app/Frameworks/_CodeSignature"
+  # Bỏ MỌI chữ ký cũ (app chính, từng appex, framework). CodeResources cũ chứa
+  # hash của bản Apple gốc — để lại thì iOS báo chữ ký tài nguyên không hợp lệ.
+  find "$app" -name _CodeSignature -type d -prune -exec rm -rf {} + 2>/dev/null || true
+  find "$app" -name SC_Info -type d -prune -exec rm -rf {} + 2>/dev/null || true
 
   # Ký lại mọi Mach-O trong app (Ksign sẽ ký đè; ad-hoc để cấu trúc hợp lệ).
   if [ -s "$ENT_MAIN" ]; then

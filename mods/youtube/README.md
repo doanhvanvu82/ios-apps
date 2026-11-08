@@ -78,6 +78,14 @@ Toolchain: `~/swift-dev` (clang), Swift SDK Darwin (`~/.swiftpm/swift-sdks`),
   so nhanh `B16@0:8`, `v40@0:8@16@?24@?32`… để phát hiện lệch ABI nếu dùng IPA
   khác bản 21.44.4. Log ghi cảnh báo nếu encoding runtime khác dump.
 
+## Bundle id khi đổi tên app (bắt buộc cho appex)
+
+Mặc định mod đổi bundle id thành `vn.vudv.youtube.mod`. Với app **có app extension**, mọi appex phải có
+bundle id bắt đầu bằng bundle id app chính, nếu không `installd` từ chối cài (app cài "thất bại" dù
+Ksign ký xong). `build.sh` tự đổi `com.google.ios.youtube.ShareExtension` → `vn.vudv.youtube.mod.ShareExtension`
+và đồng bộ `CFBundleVersion` cho cả 5 appex. Build cũng xoá **mọi** `_CodeSignature`/`SC_Info` (app chính,
+từng appex, framework widevine) — CodeResources của bản Apple gốc làm iOS báo chữ ký tài nguyên sai.
+
 ## Danh sách hook
 
 | Nhóm | Class | Selector |
