@@ -23,7 +23,8 @@ typedef struct {
 } YTMAdHook;
 
 // --- Bỏ thân hàm void -------------------------------------------------------
-static IMP _orig_controlFlowStart;static void ytm_controlFlowStart(id self, SEL _cmd, id slots, id ctx) {
+static IMP _orig_controlFlowStart;
+static void ytm_controlFlowStart(id self, SEL _cmd, id slots, id ctx) {
     if (YTAdsOffEnabled()) {
         YTModLog(@"ads: bỏ lifecycle ad slots");
         return;
