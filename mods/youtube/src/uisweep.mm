@@ -98,22 +98,23 @@ static void ytm_hide_ad_cell_from(UIView *root) {
                              (unsigned long)cv.subviews.count,
                              sub.frame.size.width, sub.frame.size.height);
                 }
-                // Đi sâu 1 tầng nữa qua node.subnodes: class từng subnode.
+                // Đi sâu 1 tầng qua node.subnodes: nếu cell chứa node quảng cáo
+                // (YTActiveViewDisplayContainerNode — ActiveView ad tracking của
+                // Google; log 3.11 chứng minh cell ad duy nhất có node này) → ẨN cell.
                 if (node) {
                     @try {
                         id subs = [node valueForKey:@"subnodes"];
                         if ([subs isKindOfClass:[NSArray class]]) {
-                            NSMutableString *names = [NSMutableString string];
-                            NSUInteger lim = [(NSArray *)subs count] > 8 ? 8 : [(NSArray *)subs count];
-                            for (NSUInteger i = 0; i < lim; i++) {
-                                id sn = subs[i];
-                                [names appendFormat:@" %@", NSStringFromClass(object_getClass(sn))];
+                            BOOL isAd = NO;
+                            for (id sn in subs) {
+                                NSString *snName = NSStringFromClass(object_getClass(sn));
+                                if ([snName containsString:@"ActiveView"]) { isAd = YES; break; }
                             }
-                            NSString *key2 = [key stringByAppendingFormat:@"|%@", names];
-                            if (![nodeSeen containsObject:key2]) {
-                                [nodeSeen addObject:key2];
-                                YTModLog(@"uisweep-probe: node %@ subnodes(%lu):%@",
-                                         ncn, (unsigned long)[(NSArray *)subs count], names);
+                            if (isAd && !v.hidden) {
+                                v.hidden = YES;
+                                g_sweepHitTotal++;
+                                YTModLog(@"uisweep: ẨN cell quảng cáo (node %@ con ActiveView, tổng %d)",
+                                         ncn, g_sweepHitTotal);
                             }
                         }
                     } @catch (__unused NSException *e) {}
