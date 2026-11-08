@@ -11,19 +11,19 @@
       "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
       "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker.png",
       "tintColor": "#738CFF",
-      "version": "1.73",
+      "version": "1.75",
       "versionDate": "2026-11-08",
-      "versionDescription": "Build 73",
-      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.73-73.ipa",
-      "size": 2060052,
+      "versionDescription": "Build 75",
+      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.75-75.ipa",
+      "size": 2075201,
       "versions": [
         {
-          "version": "1.73",
-          "buildVersion": "73",
-          "date": "2026-11-08T13:09:14+00:00",
-          "localizedDescription": "Build 73",
-          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.73-73.ipa",
-          "size": 2060052
+          "version": "1.75",
+          "buildVersion": "75",
+          "date": "2026-11-08T13:18:55+00:00",
+          "localizedDescription": "Build 75",
+          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.75-75.ipa",
+          "size": 2075201
         }
       ],
       "appPermissions": {
@@ -127,15 +127,15 @@
       "versionDate": "2026-11-08",
       "versionDescription": "Build 21.44.4",
       "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/YouTube-21.44.4.ipa",
-      "size": 135357670,
+      "size": 135356987,
       "versions": [
         {
           "version": "21.44.4",
           "buildVersion": "21.44.4",
-          "date": "2026-11-08T13:17:38+00:00",
+          "date": "2026-11-08T12:55:20+00:00",
           "localizedDescription": "Build 21.44.4",
           "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/YouTube-21.44.4.ipa",
-          "size": 135357670
+          "size": 135356987
         }
       ],
       "appPermissions": {
