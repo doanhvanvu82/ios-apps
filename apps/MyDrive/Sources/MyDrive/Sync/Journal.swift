@@ -70,10 +70,12 @@ final class Journal: ObservableObject {
 
     /// Đăng ký 1 thao tác (gọi TRƯỚC khi thay đổi local để đảm bảo không mất).
     func enqueue(_ op: JournalOp) {
+        let entry = JournalEntry(op: op)
         queue.async { [weak self] in
             guard let self else { return }
-            self.entries.append(JournalEntry(op: op))
+            self.entries.append(entry)
             self.persist()
+            self.publishCount()
         }
     }
 
@@ -83,6 +85,7 @@ final class Journal: ObservableObject {
             guard let self else { return }
             self.entries.removeAll { $0.id == entry.id }
             self.persist()
+            self.publishCount()
         }
     }
 
@@ -94,6 +97,20 @@ final class Journal: ObservableObject {
             self.entries[idx].attempts += 1
             self.entries[idx].lastError = String(error.prefix(300))
             self.persist()
+            self.publishCount()
+        }
+    }
+
+    /// @Published phải phát trên MAIN — SwiftUI đang quan sát Journal (băng
+    /// trạng thái đọc count); mutate từ queue nền gây re-render sai luồng (UI đơ).
+    private func publishCount() {
+        let n = entries.count
+        if Thread.isMainThread {
+            objectWillChange.send()
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.objectWillChange.send()
+            }
         }
     }
 

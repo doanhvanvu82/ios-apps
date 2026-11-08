@@ -34,6 +34,9 @@ final class IndexStore: ObservableObject {
     private let metaDir: URL
     private let fileURL: URL
     private let queue = DispatchQueue(label: "vn.vudv.mydrive.index")
+    private let saveQueue = DispatchQueue(label: "vn.vudv.mydrive.index.save")
+    private var pendingPersist: Persisted?
+    private var persistScheduled = false
 
     private init() {
         _ = AppPaths.migrated
@@ -57,13 +60,37 @@ final class IndexStore: ObservableObject {
         var rev: Int
     }
 
-    /// Lưu index xuống đĩa (atomically).
+    /// Lưu index xuống đĩa — NỀN + coalesce: snapshot state NGAY (đồng bộ,
+    /// rẻ — chỉ copy dictionary) rồi encode + ghi trên serial queue. Gọi hàng
+    /// trăm lần liên tiếp (đổi tên thư mục nhiều file) không chặn main thread
+    /// và chỉ ghi đĩa ~1 lần/0,2 giây (các lần sau gom chung).
     func save() {
+        let state = Persisted(nodes: index, rev: rev)
+        saveQueue.async { [weak self] in
+            guard let self else { return }
+            self.pendingPersist = state
+            guard !self.persistScheduled else { return }
+            self.persistScheduled = true
+            self.saveQueue.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                guard let self, let s = self.pendingPersist else { return }
+                self.pendingPersist = nil
+                self.persistScheduled = false
+                try? FileManager.default.createDirectory(at: self.metaDir, withIntermediateDirectories: true)
+                if let data = try? JSONEncoder().encode(s) {
+                    try? data.write(to: self.fileURL, options: .atomic)
+                }
+            }
+        }
+    }
+
+    /// Ghi ngay (dùng khi app sắp vào nền — đảm bảo mọi thay đổi đã xuống đĩa).
+    func saveNow() {
         let state = Persisted(nodes: index, rev: rev)
         try? FileManager.default.createDirectory(at: metaDir, withIntermediateDirectories: true)
         if let data = try? JSONEncoder().encode(state) {
             try? data.write(to: fileURL, options: .atomic)
         }
+        saveQueue.sync { pendingPersist = nil }
     }
 
     /// Snapshot (dùng khi mirror lên Drive).

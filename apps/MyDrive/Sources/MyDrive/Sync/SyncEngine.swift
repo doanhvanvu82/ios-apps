@@ -80,6 +80,9 @@ final class SyncEngine: ObservableObject {
     }
 
     @objc private func appWillResignActive() {
+        // Flush index + journal xuống đĩa ngay trước khi nền (mọi thay đổi pending
+        // của coalesce phải chắc chắn nằm trên đĩa).
+        IndexStore.shared.saveNow()
         // Hoàn tất batch đang chạy trong nền (iOS cho ~30 giây).
         if syncTask != nil {
             backgroundTaskID = UIApplication.shared.beginBackgroundTask(withName: "MyDriveSync") { [weak self] in
