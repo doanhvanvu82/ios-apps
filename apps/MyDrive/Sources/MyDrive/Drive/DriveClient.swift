@@ -430,6 +430,12 @@ final class DriveClient {
         _ = try await request("PATCH", "/files/\(id)", jsonBody: ["trashed": true])
     }
 
+    /// Xoá hẳn khỏi Drive (dọn rác - folder trùng do TOCTOU khi nhiều worker
+    /// cùng ensureFolderPath; Drive cho phép trùng tên trong 1 thư mục).
+    func delete(id: String) async throws {
+        _ = try await request("DELETE", "/files/\(id)")
+    }
+
     /// Lấy khỏi thùng rác (khôi phục từ "Đã xóa gần đây").
     func untrash(id: String) async throws {
         _ = try await request("PATCH", "/files/\(id)", jsonBody: ["trashed": false])

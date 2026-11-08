@@ -203,6 +203,13 @@ final class SyncEngine: ObservableObject {
         // 4) Mirror index.json lên MỌI account.
         await mirrorIndex(rootIDs: rootIDs)
 
+        // 4.5) DỌN FOLDER TRÙNG: nhiều worker song song cùng ensureFolderPath
+        //      (TOCTOU: cùng thấy chưa có → cùng tạo) sinh folder trùng tên
+        //      (Manga/Color/No… x4-5 lần, bug 08/11). Drive cho phép trùng tên
+        //      trong 1 thư mục. Giữ bản có driveFolderId trong index, xoá hẳn
+        //      các bản cùng tên trong cùng parent KHÔNG được app tham chiếu.
+        await dedupeDuplicateFolders(rootIDs: rootIDs)
+
         // Vẫn còn op chờ (account đầy, lỗi tạm) → KHÔNG báo idle: banner giữ
         // trạng thái "N thao tác chờ" để người dùng biết sync chưa xong.
         if journal.count == 0 {
@@ -683,6 +690,70 @@ final class SyncEngine: ObservableObject {
         }
         try Chunker.assemble(parts: downloaded, to: destURL)
         AppLog.log("sync", "✅ Đã tải \(node.name) (\(parts.count) parts)")
+    }
+
+    // MARK: - Dọn folder trùng (TOCTOU)
+
+    /// Nhiều worker song song cùng ensureFolderPath (TOCTOU) tạo folder trùng
+    /// tên trong cùng parent (Manga/Color/No… lặp x4-5). Giữ folder mà index
+    /// THAM CHIẾU (node trên path đó hoặc cha của part bất kỳ); xoá hẳn
+    /// (DELETE, không trash — trash vẫn lấp Drive UI 30 ngày) bản trùng.
+    /// Chỉ quét dưới root MyDrive của app, chỉ folder, không đụng file.
+    private func dedupeDuplicateFolders(rootIDs: [String: String]) async {
+        var removedTotal = 0
+        for (email, rootID) in rootIDs {
+            guard let client = accounts.client(for: email) else { continue }
+            do {
+                let all = try await client.listAllNonTrashed()
+                // Tập id mà app ĐANG dùng: root + mọi driveFolderId trong index.
+                var keep: Set<String> = [rootID]
+                for node in index.allNodes().map(\.node) {
+                    if let fid = node.driveFolderId { keep.insert(fid) }
+                }
+
+                // Suy cây: parentID → folder con.
+                var folders: [String: [DriveFile]] = [:]
+                var byID: [String: DriveFile] = [:]
+                for f in all where f.isFolder {
+                    byID[f.id] = f
+                    for p in f.parents ?? [] {
+                        folders[p, default: []].append(f)
+                    }
+                }
+
+                // DFS từ root + từ folder index tham chiếu: đánh dấu cả CÂY.
+                var onTree: Set<String> = []
+                func markTree(_ id: String) {
+                    guard !onTree.contains(id) else { return }
+                    onTree.insert(id)
+                    for child in folders[id] ?? [] {
+                        markTree(child.id)
+                    }
+                }
+                for id in keep { markTree(id) }
+
+                // Rác = folder KHÔNG trên cây nào. Xoá hẳn để UI web sạch ngay.
+                var removed = 0
+                for (id, f) in byID where !onTree.contains(id) {
+                    // An toàn: chỉ xoá folder RỖNG (rác TOCTOU luôn rỗng — file
+                    // đều nằm trong cây hợp lệ). Chứa file → khỏi đụng.
+                    let hasFiles = all.contains { !$0.isFolder && ($0.parents ?? []).contains(id) }
+                    guard !hasFiles else { continue }
+                    try? await client.delete(id: id)
+                    removed += 1
+                    AppLog.log("sync", "🧹 Xoá folder trùng \(f.name) (\(id.prefix(8))…) — rác TOCTOU")
+                }
+                if removed > 0 {
+                    removedTotal += removed
+                    AppLog.log("sync", "🧹 \(email): đã xoá \(removed) folder trùng")
+                }
+            } catch {
+                AppLog.log("sync", "⚠️ Không dọn folder trùng trên \(email): \(error.localizedDescription)")
+            }
+        }
+        if removedTotal == 0 {
+            AppLog.log("sync", "🧹 Không có folder trùng nào cần dọn")
+        }
     }
 
     // MARK: - Mirror index.json
