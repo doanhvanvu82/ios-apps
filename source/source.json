@@ -125,17 +125,17 @@
       "tintColor": "#738CFF",
       "version": "21.44.4",
       "versionDate": "2026-11-08",
-      "versionDescription": "Build 1794103479",
-      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/YouTube-21.44.4-1794103479.ipa",
-      "size": 135338805,
+      "versionDescription": "Build 21.44.4",
+      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/YouTube-21.44.4.ipa",
+      "size": 135339316,
       "versions": [
         {
           "version": "21.44.4",
-          "buildVersion": "1794103479",
-          "date": "2026-11-08T02:11:36+00:00",
-          "localizedDescription": "Build 1794103479",
-          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/YouTube-21.44.4-1794103479.ipa",
-          "size": 135338805
+          "buildVersion": "21.44.4",
+          "date": "2026-11-08T02:15:15+00:00",
+          "localizedDescription": "Build 21.44.4",
+          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/YouTube-21.44.4.ipa",
+          "size": 135339316
         }
       ],
       "appPermissions": {
