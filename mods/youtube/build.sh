@@ -27,7 +27,7 @@ WORK="$HERE/work"
 OUT="$HERE/out"
 APP_NAME="YouTube"
 DYLIB_NAME="libyoutubemod.dylib"
-MOD_VERSION="${MOD_VERSION:-3.0}"
+MOD_VERSION="${MOD_VERSION:-3.1}"
 # Nhãn build hiển thị trong menu (biết đang dùng bản mới hay cũ).
 BUILD_LABEL="${BUILD_LABEL:-$(date +%y%m%d-%H%M)}"
 # Mặc định giữ bundle id gốc: đổi id thì Google chặn đăng nhập và không trả

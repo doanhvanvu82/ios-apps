@@ -227,6 +227,35 @@ static id h_elData(id s, SEL c) {
     return v;
 }
 
+// --- TẦNG ĐÚNG (log 3.0): không tạo controller cho element quảng cáo ---------
+// Chuỗi sự kiện 18:44:14: ads didLoadRenderer bị SKIP (hook void chạy) → 47ms
+// sau eldata XÓA element ad → nhưng pagead/adview + simgad VẪN tải → cell ad
+// được dựng qua đường ELM, KHÔNG qua cellSizeWithSize (probe CELL chỉ thấy
+// GhostCard) và không qua createCellControllerForEntry (2.7 gây trống feed).
+// Cổng còn lại duy nhất: ELMControllerFactory.controllerWithElement:context:
+// treeLocalContext: (@40@0:8@16@24@32) — nơi mỗi element được chuyển thành
+// controller để render. Element quảng cáo → trả nil (ELM bỏ qua element này,
+// như element bị xoá; caller kiểm nil chuẩn vì element có thể thiếu controller).
+static IMP _o_elmCtl;
+static id h_elmCtl(id s, SEL c, id element, id ctx, id treeCtx) {
+    id v = ((id (*)(id, SEL, id, id, id))_o_elmCtl)(s, c, element, ctx, treeCtx);
+    if (!YTAdsOffEnabled() || !element) return v;
+    @try {
+        NSString *desc = [element respondsToSelector:@selector(description)]
+                             ? [element description] : @"";
+        if (ytm_desc_is_ad(desc ?: @"")) {
+            static int logged = 0;
+            if (logged < 200) {
+                logged++;
+                YTModLog(@"elmctl: TỪ CHỐI tạo controller cho element quảng cáo %@",
+                         NSStringFromClass(object_getClass(element)));
+            }
+            return nil;
+        }
+    } @catch (__unused NSException *e) {}
+    return v;
+}
+
 // --- Tầng cell controller (createCellControllerForEntry:) -------------------
 // 2.7 BỎ: entry của hàm này là SECTION/entry lớn chứa element con — mô tả của
 // nó có thể chứa ad_logging_data của element con → trả nil làm TRỐNG CẢ FEED
@@ -332,9 +361,9 @@ static BOOL ytm_install_one(const char *clsName, const char *selName, IMP hook, 
 void YTSectionFilterInstall(void) {
     // Chỉ cài mỗi hook 1 lần: cài đè lên chính mình sẽ khiến *orig trỏ vào hook
     // của mình → đệ quy vô hạn.
-    static BOOL done[10];
+    static BOOL done[11];
     int n = 0;
-    struct { const char *cls; const char *sel; IMP hook; IMP *orig; const char *label; } all[10] = {
+    struct { const char *cls; const char *sel; IMP hook; IMP *orig; const char *label; } all[11] = {
         {"YTISectionListRenderer", "sectionRenderers", (IMP)h_sectionRenderers, &_o_sectionRenderers, "feed"},
         {"YTIWatchNextResponse", "sectionRenderers", (IMP)h_wnSectionRenderers, &_o_wnSectionRenderers, "watch"},
         {"ELMPBFeedData", "contents", (IMP)h_feedContents, &_o_feedContents, "elm"},
@@ -345,8 +374,9 @@ void YTSectionFilterInstall(void) {
         {"YTBaseFeedController", "createCellControllerForEntry:", (IMP)h_cccBase, &_o_cccBase, "cell-base"},
         {"YTFeedSectionController", "createCellControllerForEntry:", (IMP)h_cccFeed, &_o_cccFeed, "cell-feed"},
         {"YTSectionController", "createCellControllerForEntry:", (IMP)h_cccSec, &_o_cccSec, "cell-sec"},
+        {"ELMControllerFactory", "controllerWithElement:context:treeLocalContext:", (IMP)h_elmCtl, &_o_elmCtl, "elmctl"},
     };
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 11; i++) {
         if (done[i]) { n++; continue; }
         if (ytm_install_one(all[i].cls, all[i].sel, all[i].hook, all[i].orig, all[i].label)) {
             done[i] = YES;
