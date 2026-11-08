@@ -136,7 +136,8 @@ final class DriveClient {
     func listAllNonTrashed() async throws -> [DriveFile] {
         var out: [DriveFile] = []
         var pageToken: String? = nil
-        let fields = "nextPageToken, files(id,parents)"
+        // name BẮT BUỘC: DriveFile.name là non-optional — thiếu field là decode chết (bug 1.97).
+        let fields = "nextPageToken, files(id,name,parents)"
         repeat {
             var query = [
                 URLQueryItem(name: "q", value: "trashed = false"),
