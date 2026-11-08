@@ -49,17 +49,15 @@ static void ytm_try_start_pip(void) {
             YTModLog(@"autopip: PiP đã bật sẵn");
             return;
         }
-        if (!can) {
-            YTModLog(@"autopip: player chưa cho phép PiP");
-            return;
-        }
+        // Vẫn gọi kể cả khi `can` = NO: hàm toggle tự kiểm tra lại lúc chạy,
+        // còn giá trị đọc sớm có thể chưa kịp cập nhật.
         SEL toggleSel = sel_registerName("maybeTogglePictureInPicture");
         if (![ctl respondsToSelector:toggleSel]) {
             YTModLog(@"autopip: thiếu maybeTogglePictureInPicture");
             return;
         }
         ((void (*)(id, SEL))objc_msgSend)(ctl, toggleSel);
-        YTModLog(@"autopip: đã gọi bật PiP");
+        YTModLog(@"autopip: đã gọi bật PiP (can=%d)", can);
     } @catch (__unused NSException *e) {
         YTModLog(@"autopip: lỗi khi bật PiP");
     }
