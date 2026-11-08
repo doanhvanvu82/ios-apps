@@ -201,10 +201,7 @@ static id h_elData(id s, SEL c) {
     id v = ((id (*)(id, SEL))_o_elData)(s, c);
     if (!YTAdsOffEnabled()) return v;
     @try {
-        // Dấu hiệu quảng cáo nằm ở MÔ TẢ CỦA CHÍNH ELEMENT RENDERER (`s`) —
-        // probe in `[s description]` mới thấy `compatibility_options {…
-        // ad_logging_data {…`. 2.4 sai vì kiểm tra `[v description]` (object
-        // data con) nên không bao giờ khớp.
+        // Dấu hiệu quảng cáo nằm ở MÔ TẢ CỦA CHÍNH ELEMENT RENDERER (`s`).
         NSString *desc = [s respondsToSelector:@selector(description)]
                              ? [s description] : @"";
         if (ytm_desc_is_ad(desc ?: @"")) {
@@ -213,9 +210,18 @@ static id h_elData(id s, SEL c) {
                 logged++;
                 YTModLog(@"eldata: XÓA dữ liệu element quảng cáo %@", s);
             }
-            // Trả một YTIElementRenderer rỗng: builder không có renderer con để
-            // dựng cell, element bị bỏ qua hoàn toàn.
-            return [[objc_getClass("YTIElementRenderer") alloc] init];
+            // 2.5 crash: trả YTIElementRenderer (sai class, khác kiểu với data)
+            // → caller gọi selector của data lên nó → doesNotRecognizeSelector.
+            // Cách đúng: tạo YTIElementRenderer RỖNG rồi gọi IMP GỐC elementData
+            // trên nó (không qua dispatch nên hook không tự đệ quy) — kết quả là
+            // data RỖNG CÙNG KIỂU với data thật, an toàn cho mọi selector mà
+            // caller gọi (đúng như element không có data: hasElementData=NO).
+            Class cls = object_getClass(s);
+            id blank = [[cls alloc] init];
+            id empty = blank
+                ? ((id (*)(id, SEL))_o_elData)(blank, c)
+                : nil;
+            return empty ?: v;
         }
     } @catch (__unused NSException *e) {}
     return v;
