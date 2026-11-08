@@ -13,8 +13,6 @@ static void ytm_did_finish_launch(void) {
     YTPromoBlockInstall();
     YTSectionFilterInstall();
     YTAutoPiPInstall();
-    YTUISweepInstall();
-    YTUISweepInstall();
     if (YTModBool(YTKeyMenu, YES)) {
         YTMenuInstall();
     }
@@ -23,6 +21,9 @@ static void ytm_did_finish_launch(void) {
 __attribute__((constructor)) static void ytm_init(void) {
     YTModLogOpen();
     YTModLog(@"dylib nạp (mod %s, build %s)", YT_VERSION_TAG, YT_BUILD_LABEL);
+    // UISweep cài SỚM NHẤT: hook YTActiveViewDisplayContainerNode phải có trước
+    // khi feed render cell ad đầu (log 3.16: hook cài lúc launchMissed element #1).
+    YTUISweepInstall();
     // Về foreground (scene mới) thì thử cài lại hook ad — module lazy có thể
     // chưa có lúc launch. YTAdBlockInstall chỉ chạy 1 lần nên gọi ở đây an toàn.
     [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification
