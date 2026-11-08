@@ -200,7 +200,7 @@ static int g_sizeLog = 0;
 static IMP _o_sizeForCell;
 static CGSize h_sizeForCell(id s, SEL c, id cc, CGSize size) {
     CGSize r = ((CGSize (*)(id, SEL, id, CGSize))_o_sizeForCell)(s, c, cc, size);
-    if (!YTAdsOffEnabled()) return r;
+    if (!YTAdsOffEnabled() || CGSizeEqualToSize(r, CGSizeZero)) return r;
     @try {
         // cell controller có property `entry` (YTCellController) — model gốc.
         id entry = [cc respondsToSelector:@selector(entry)]
@@ -216,6 +216,31 @@ static CGSize h_sizeForCell(id s, SEL c, id cc, CGSize size) {
         if (logged < 25) {
             logged++;
             YTModLog(@"size: NÉN cell quảng cáo %@ (%.0fx%.0f → 0)",
+                     NSStringFromClass(object_getClass(cc)), r.width, r.height);
+        }
+        return CGSizeZero;
+    } @catch (__unused NSException *e) {
+        return r;
+    }
+}
+
+// Lớp con feed trang chủ tự định nghĩa sizeForCellController:withSize: — cài
+// riêng, nếu không caller đi thẳng IMP con và bỏ qua hook của lớp cha.
+static IMP _o_sizeForFeed;
+static CGSize h_sizeForFeed(id s, SEL c, id cc, CGSize size) {
+    CGSize r = ((CGSize (*)(id, SEL, id, CGSize))_o_sizeForFeed)(s, c, cc, size);
+    if (!YTAdsOffEnabled() || CGSizeEqualToSize(r, CGSizeZero)) return r;
+    @try {
+        id entry = [cc respondsToSelector:@selector(entry)]
+                       ? ((id (*)(id, SEL))objc_msgSend)(cc, @selector(entry))
+                       : nil;
+        if (!entry) return r;
+        NSString *desc = [entry description] ?: @"";
+        if (!ytm_desc_is_ad(desc)) return r;
+        static int logged = 0;
+        if (logged < 25) {
+            logged++;
+            YTModLog(@"feedsize: NÉN cell quảng cáo %@ (%.0fx%.0f → 0)",
                      NSStringFromClass(object_getClass(cc)), r.width, r.height);
         }
         return CGSizeZero;
@@ -243,16 +268,17 @@ static BOOL ytm_install_one(const char *clsName, const char *selName, IMP hook, 
 void YTSectionFilterInstall(void) {
     // Chỉ cài mỗi hook 1 lần: cài đè lên chính mình sẽ khiến *orig trỏ vào hook
     // của mình → đệ quy vô hạn.
-    static BOOL done[5];
+    static BOOL done[6];
     int n = 0;
-    struct { const char *cls; const char *sel; IMP hook; IMP *orig; const char *label; } all[5] = {
+    struct { const char *cls; const char *sel; IMP hook; IMP *orig; const char *label; } all[6] = {
         {"YTISectionListRenderer", "sectionRenderers", (IMP)h_sectionRenderers, &_o_sectionRenderers, "feed"},
         {"YTIWatchNextResponse", "sectionRenderers", (IMP)h_wnSectionRenderers, &_o_wnSectionRenderers, "watch"},
         {"ELMPBFeedData", "contents", (IMP)h_feedContents, &_o_feedContents, "elm"},
         {"YTIElementTabRenderer", "contentsArray", (IMP)h_tabContents, &_o_tabContents, "tab"},
         {"YTSectionController", "sizeForCellController:withSize:", (IMP)h_sizeForCell, &_o_sizeForCell, "size"},
+        {"YTFeedSectionController", "sizeForCellController:withSize:", (IMP)h_sizeForFeed, &_o_sizeForFeed, "feedsize"},
     };
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 6; i++) {
         if (done[i]) { n++; continue; }
         if (ytm_install_one(all[i].cls, all[i].sel, all[i].hook, all[i].orig, all[i].label)) {
             done[i] = YES;
