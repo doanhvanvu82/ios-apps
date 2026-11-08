@@ -256,6 +256,44 @@ static id h_elmCtl(id s, SEL c, id element, id ctx, id treeCtx) {
     return v;
 }
 
+// --- TẦNG NGUỒN (log 3.1 + phân tích binary): chặn trước khi vào ELM runtime --
+// Flow feed trang chủ: browse response → YTIElementRenderer[] →
+// YTBrowseContinuationSourceBlock.createElementBytesArrayFromElementRenderers:
+// (@24@0:8@16) → bytes → ELM C++ runtime (youtube::elements::protos::Element) →
+// cell. elementData XÓA vô hiệu vì runtime đọc BYTES (serialized từ renderer gốc,
+// không qua elementData). Cổng đúng: lọc renderer quảng cáo khỏi mảng đầu vào —
+// element ad sẽ KHÔNG TỒN TẠI trong runtime, không cell, không adview.
+static IMP _o_bytesFromRenderers;
+static id h_bytesFromRenderers(id s, SEL c, id renderers) {
+    if (!YTAdsOffEnabled() || ![renderers isKindOfClass:[NSArray class]])
+        return ((id (*)(id, SEL, id))_o_bytesFromRenderers)(s, c, renderers);
+    NSArray *arr = (NSArray *)renderers;
+    NSMutableArray *clean = nil;
+    NSUInteger removed = 0;
+    for (NSUInteger i = 0; i < arr.count; i++) {
+        id e = arr[i];
+        @try {
+            NSString *desc = [e respondsToSelector:@selector(description)]
+                                 ? [e description] : @"";
+            if (ytm_desc_is_ad(desc ?: @"")) {
+                removed++;
+                if (!clean) clean = [NSMutableArray arrayWithArray:arr];
+                [clean removeObject:e];
+                static int logged = 0;
+                if (logged < 200) {
+                    logged++;
+                    YTModLog(@"bytes: LỌC renderer quảng cáo %@ khỏi feed",
+                             NSStringFromClass(object_getClass(e)));
+                }
+            }
+        } @catch (__unused NSException *ex) {}
+    }
+    if (!removed) return ((id (*)(id, SEL, id))_o_bytesFromRenderers)(s, c, renderers);
+    YTModLog(@"bytes: loại %lu renderer quảng cáo trước khi vào ELM runtime",
+             (unsigned long)removed);
+    return ((id (*)(id, SEL, id))_o_bytesFromRenderers)(s, c, clean ?: renderers);
+}
+
 // --- Tầng cell controller (createCellControllerForEntry:) -------------------
 // 2.7 BỎ: entry của hàm này là SECTION/entry lớn chứa element con — mô tả của
 // nó có thể chứa ad_logging_data của element con → trả nil làm TRỐNG CẢ FEED
@@ -361,9 +399,9 @@ static BOOL ytm_install_one(const char *clsName, const char *selName, IMP hook, 
 void YTSectionFilterInstall(void) {
     // Chỉ cài mỗi hook 1 lần: cài đè lên chính mình sẽ khiến *orig trỏ vào hook
     // của mình → đệ quy vô hạn.
-    static BOOL done[11];
+    static BOOL done[12];
     int n = 0;
-    struct { const char *cls; const char *sel; IMP hook; IMP *orig; const char *label; } all[11] = {
+    struct { const char *cls; const char *sel; IMP hook; IMP *orig; const char *label; } all[12] = {
         {"YTISectionListRenderer", "sectionRenderers", (IMP)h_sectionRenderers, &_o_sectionRenderers, "feed"},
         {"YTIWatchNextResponse", "sectionRenderers", (IMP)h_wnSectionRenderers, &_o_wnSectionRenderers, "watch"},
         {"ELMPBFeedData", "contents", (IMP)h_feedContents, &_o_feedContents, "elm"},
@@ -375,8 +413,9 @@ void YTSectionFilterInstall(void) {
         {"YTFeedSectionController", "createCellControllerForEntry:", (IMP)h_cccFeed, &_o_cccFeed, "cell-feed"},
         {"YTSectionController", "createCellControllerForEntry:", (IMP)h_cccSec, &_o_cccSec, "cell-sec"},
         {"ELMControllerFactory", "controllerWithElement:context:treeLocalContext:", (IMP)h_elmCtl, &_o_elmCtl, "elmctl"},
+        {"YTBrowseContinuationSourceBlock", "createElementBytesArrayFromElementRenderers:", (IMP)h_bytesFromRenderers, &_o_bytesFromRenderers, "bytes"},
     };
-    for (int i = 0; i < 11; i++) {
+    for (int i = 0; i < 12; i++) {
         if (done[i]) { n++; continue; }
         if (ytm_install_one(all[i].cls, all[i].sel, all[i].hook, all[i].orig, all[i].label)) {
             done[i] = YES;
