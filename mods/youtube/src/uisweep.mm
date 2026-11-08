@@ -19,6 +19,8 @@ static int g_sweepHitTotal = 0;
 static NSTimer *g_sweepTimer = nil;
 // Cell quảng cáo đã ẩn (weak wrapper, tự dọn khi cell dealloc).
 static NSMutableArray *g_hiddenCells = nil;
+// [UICollectionView, NSIndexPath] của cell ad đã ẩn — hook layout đọc để ép size 0.
+static NSMutableArray *g_hiddenIndexPaths = nil;
 
 @interface YTMWeakWrapper : NSObject
 @property (nonatomic, weak) id object;
@@ -147,6 +149,21 @@ static void h_avdEnter(id s, SEL c) {
                 cell.frame = CGRectMake(f.origin.x, f.origin.y, 0, 0);
                 if (!g_hiddenCells) g_hiddenCells = [NSMutableArray new];
                 [g_hiddenCells addObject:[YTMWeakWrapper wrapperWithObject:cell]];
+                // Lưu indexPath để hook layoutAttributes ép size 0 (layout vẫn
+                // giữ size gốc — nguyên nhân khoảng trống).
+                UIView *cvView = cell.superview;
+                while (cvView && ![cvView isKindOfClass:[UICollectionView class]]) {
+                    cvView = cvView.superview;
+                }
+                if ([cvView isKindOfClass:[UICollectionView class]]) {
+                    UICollectionView *colView = (UICollectionView *)cvView;
+                    NSIndexPath *ip = [colView indexPathForCell:(UICollectionViewCell *)cell];
+                    if (ip) {
+                        [g_hiddenIndexPaths addObject:@[cvView, ip]];
+                        YTModLog(@"nodehide: cell ad indexPath section %ld row %ld",
+                                 (long)ip.section, (long)ip.row);
+                    }
+                }
                 g_sweepHitTotal++;
                 YTModLog(@"nodehide: cell quảng cáo bị ẨN ngay khi vào viewport (tổng %d)",
                          g_sweepHitTotal);
@@ -189,6 +206,8 @@ void YTUISweepInstall(void) {
                                 method_getTypeEncoding(avdE));
             YTModLog(@"uisweep: hook didEnterVisibleState OK");
         }
+        g_hiddenCells = [NSMutableArray new];
+        g_hiddenIndexPaths = [NSMutableArray new];
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
             ytm_sweep_once();
