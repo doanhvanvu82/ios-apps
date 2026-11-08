@@ -68,7 +68,11 @@ static NSArray *h_layoutAttrsInRect(id s, SEL c, CGRect rect) {
             NSIndexPath *ip = attr.indexPath;
             BOOL hit = NO;
             for (NSArray *pair in g_hiddenIndexPaths) {
-                if (pair[0] == s && [pair[1] isEqual:ip]) { hit = YES; break; }
+                // pair[0] là UICollectionView; `s` là layout object của nó.
+                UICollectionView *colView = pair[0];
+                if (colView.collectionViewLayout == s && [pair[1] isEqual:ip]) {
+                    hit = YES; break;
+                }
             }
             if (hit && !CGSizeEqualToSize(attr.size, CGSizeZero)) {
                 if (!modified) modified = [attrs mutableCopy];
