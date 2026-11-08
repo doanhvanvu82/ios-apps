@@ -10,6 +10,7 @@ static void ytm_did_finish_launch(void) {
     YTAdBlockInstall();
     YTPromoBlockInstall();
     YTSectionFilterInstall();
+    YTProbeInstall();
     if (YTModBool(YTKeyMenu, YES)) {
         YTMenuInstall();
     }
@@ -27,6 +28,7 @@ __attribute__((constructor)) static void ytm_init(void) {
         YTAdBlockInstall();
         YTPromoBlockInstall();
         YTSectionFilterInstall();
+        YTProbeInstall();
     }];
     // Dylib nạp trước UIApplicationMain: chờ notification launch. Nếu app đã
     // launch từ trước (không xảy ra với LC_LOAD_DYLIB nhưng để chắc), dùng timer.

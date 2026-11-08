@@ -60,6 +60,9 @@ void YTPromoBlockInstall(void);
 // Lọc entry quảng cáo/promo khỏi section renderers.
 void YTSectionFilterInstall(void);
 
+// Chẩn đoán element/cell quảng cáo của feed (mod 1.6).
+void YTProbeInstall(void);
+
 #ifdef __cplusplus
 }
 #endif
