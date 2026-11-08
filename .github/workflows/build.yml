@@ -213,4 +213,10 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           ls -lh dist
+          # Build một phần (scope/only) thì publish từng phần: giữ app khác
+          # trong source.json và asset cũ trên release. Publish thường
+          # (scope=all, không only) build lại tất cả nên dọn asset cũ như cũ.
+          if [ "${{ inputs.scope || 'all' }}" != "all" ] || [ -n "${{ inputs.only || '' }}" ]; then
+            export PUBLISH_ONLY=1
+          fi
           ./toolkit/publish_github.sh

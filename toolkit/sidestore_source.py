@@ -171,9 +171,9 @@ def main():
         print(f"http://{lan_ip()}:{PORT}")
         return
     positional = [a for a in args if not a.startswith("--")]
-    # Bỏ giá trị đi kèm --dist/--source-url khỏi danh sách positional.
+    # Bỏ giá trị đi kèm --dist/--source-url/--merge-from khỏi danh sách positional.
     skip = set()
-    for name in ("--dist", "--source-url"):
+    for name in ("--dist", "--source-url", "--merge-from"):
         if name in args:
             i = args.index(name)
             skip.add(i)
@@ -190,6 +190,28 @@ def main():
     for ipa in collect_ipas():
         apps.append(app_entry(ipa, base, now))
 
+    # Danh sách app vừa build (trước khi gộp) — publish dùng để chỉ dọn asset
+    # của đúng những app này, không đụng app khác.
+    with open(os.path.join(OUT, ".built-apps.json"), "w", encoding="utf-8") as fh:
+        json.dump(apps, fh, ensure_ascii=False)
+
+    built_count = len(apps)
+    merge_from = None
+    if "--merge-from" in args:
+        merge_from = args[args.index("--merge-from") + 1]
+    if merge_from:
+        # Publish một mục (scope/only) không được làm mất app khác khỏi source:
+        # giữ nguyên entry cũ của app không nằm trong lần build này.
+        with open(merge_from, encoding="utf-8") as fh:
+            old = json.load(fh)
+        new_by_id = {a["bundleIdentifier"]: a for a in apps}
+        merged = []
+        for a in old.get("apps", []):
+            merged.append(new_by_id.pop(a.get("bundleIdentifier"), a))
+        merged.extend(new_by_id.values())
+        print(f"→ Gộp từ {os.path.basename(merge_from)}: giữ {len(merged) - built_count} mục cũ.")
+        apps = merged
+
     source = {
         "name": "iOS apps (máy nhà)",
         "identifier": SOURCE_ID,
@@ -201,6 +223,7 @@ def main():
         json.dump(source, fh, ensure_ascii=False, indent=2)
     listed = ", ".join(f"{a['name']} {a['version']}" for a in apps)
     print(f"✅ Source Ksign: {source_url}  ({listed})")
+    print(f"   build mới: {built_count}, tổng: {len(apps)}")
 
 
 if __name__ == "__main__":
