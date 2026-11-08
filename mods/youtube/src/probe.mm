@@ -26,7 +26,7 @@ static IMP _o_elementData;
 static id h_elementData(id s, SEL c) {
     id v = ((id (*)(id, SEL))_o_elementData)(s, c);
     @try {
-        if (g_elemCount < 60) {
+        if (g_elemCount < 200) {
             NSString *desc = [s description];
             if (!g_elemSeen) g_elemSeen = [NSMutableSet new];
             if (ytm_interesting(desc)) {
@@ -84,7 +84,7 @@ static int g_cellProbe = 0;
 static IMP _o_cellSize;
 static CGSize h_cellSize(id s, SEL c, CGSize size) {
     CGSize r = ((CGSize (*)(id, SEL, CGSize))_o_cellSize)(s, c, size);
-    if (g_cellProbe < 80) {
+    if (g_cellProbe < 200) {
         @try {
             NSString *cn = NSStringFromClass(object_getClass(s));
             id entry = nil;
@@ -95,17 +95,16 @@ static CGSize h_cellSize(id s, SEL c, CGSize size) {
             NSString *ecn = entry ? NSStringFromClass(object_getClass(entry)) : nil;
             NSString *desc = [entry respondsToSelector:sel_registerName("description")]
                                  ? [entry description] : nil;
-            BOOL hit = ytm_interesting(cn) || ytm_interesting(ecn) || ytm_interesting(desc);
-            if (hit) {
-                if (!g_cellSeen) g_cellSeen = [NSMutableSet new];
-                NSString *key = [NSString stringWithFormat:@"%@|%@|%.0f", cn, ecn, r.height];
-                if (![g_cellSeen containsObject:key]) {
-                    [g_cellSeen addObject:key];
-                    g_cellProbe++;
-                    NSString *d400 = desc.length > 400 ? [desc substringToIndex:400] : desc;
-                    YTModLog(@"probe: CELL %@ entry=%@ size=%.0fx%.0f\n%@",
-                             cn, ecn, r.width, r.height, d400);
-                }
+            // Log MỌI cell (không chỉ ad): cần biết chính xác controller nào dựng
+            // cell cho element quảng cáo và entry của nó là gì.
+            if (!g_cellSeen) g_cellSeen = [NSMutableSet new];
+            NSString *keyAll = [NSString stringWithFormat:@"%@|%@|%.0f", cn, ecn, r.height];
+            if (![g_cellSeen containsObject:keyAll]) {
+                [g_cellSeen addObject:keyAll];
+                g_cellProbe++;
+                NSString *d300 = desc.length > 300 ? [desc substringToIndex:300] : desc;
+                YTModLog(@"probe: CELL %@ entry=%@ size=%.0fx%.0f\n%@",
+                         cn, ecn, r.width, r.height, d300);
             }
         } @catch (__unused NSException *e) {}
     }
@@ -133,9 +132,11 @@ void YTProbeInstall(void) {
         }
         static const char *bases[] = {
             "YTActiveViewCellController", "YTElementsCellController",
-            "YTVideoElementCellController",
+            "YTVideoElementCellController", "YTCellController",
+            "YTInnerTubeCellController", "YTMutableCellFactory",
+            "YTChainedCellFactory",
         };
-        static IMP origs[3];
+        static IMP origs[7];
         for (size_t i = 0; i < sizeof(bases) / sizeof(bases[0]); i++) {
             Class b = objc_getClass(bases[i]);
             if (!b) continue;

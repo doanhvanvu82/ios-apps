@@ -206,7 +206,7 @@ static id h_elData(id s, SEL c) {
                              ? [s description] : @"";
         if (ytm_desc_is_ad(desc ?: @"")) {
             static int logged = 0;
-            if (logged < 20) {
+            if (logged < 200) {
                 logged++;
                 YTModLog(@"eldata: XÓA dữ liệu element quảng cáo %@", s);
             }
