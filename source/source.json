@@ -11,19 +11,19 @@
       "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
       "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker.png",
       "tintColor": "#738CFF",
-      "version": "1.71",
+      "version": "1.72",
       "versionDate": "2026-11-08",
-      "versionDescription": "Build 71",
-      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.71-71.ipa",
-      "size": 2027598,
+      "versionDescription": "Build 72",
+      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.72-72.ipa",
+      "size": 2059979,
       "versions": [
         {
-          "version": "1.71",
-          "buildVersion": "71",
-          "date": "2026-11-08T12:20:25+00:00",
-          "localizedDescription": "Build 71",
-          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.71-71.ipa",
-          "size": 2027598
+          "version": "1.72",
+          "buildVersion": "72",
+          "date": "2026-11-08T12:28:59+00:00",
+          "localizedDescription": "Build 72",
+          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.72-72.ipa",
+          "size": 2059979
         }
       ],
       "appPermissions": {
