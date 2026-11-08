@@ -112,6 +112,14 @@ static void ytm_hide_ad_cell_from(UIView *root) {
                             }
                             if (isAd && !v.hidden) {
                                 v.hidden = YES;
+                                // Thu nhỏ frame về 0 để khoảng trống của cell
+                                // không còn — sweep liên tục sẽ đặt lại nếu
+                                // collection reuse cell này cho phần tử khác
+                                // (cell ad chỉ hiện lại nếu element ad thật).
+                                CGRect f = v.frame;
+                                if (f.size.width > 1 || f.size.height > 1) {
+                                    v.frame = CGRectMake(f.origin.x, f.origin.y, 0, 0);
+                                }
                                 g_sweepHitTotal++;
                                 YTModLog(@"uisweep: ẨN cell quảng cáo (node %@ con ActiveView, tổng %d)",
                                          ncn, g_sweepHitTotal);
