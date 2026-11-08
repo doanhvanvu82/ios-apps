@@ -16,6 +16,13 @@ Tiêm dylib ObjC++ vào IPA YouTube **đã giải mã** (bản dump từ thiết
   **Bẫy**: không trả nil từ hàm `init`/`create`/`slotFrom…` trả object
   (`YTAdSlot initWithSlotID…`, `YTSlotFactoryImpl.slotFromAdSlotMetadata…`) —
   caller dùng ngay → `EXC_BAD_ACCESS` tại `objc_retain`.
+- **Chặn quảng cáo feed + promo Premium** (`promo.mm`): cell quảng cáo/promo
+  trong feed trả kích thước `CGSizeZero` (`cellSizeWithSize:`…) nên không
+  chiếm chỗ; chặn trigger upsell/mealbar/interstitial (`triggerMatched`,
+  `triggerPromoFromCommandWrapperRenderer:`, `showUpsell:…`,
+  `startWithFirstResponder:`, `showSurvey…`) và các cổng promo trả `NO`
+  (`canShowThrottledPromo*`, `shouldShowPromotedItems`) — log `promo: OK`,
+  `promo: CHẶN`.
 - **Menu YT**: hiện `YT <phiên bản app> · mod <MOD_VERSION>` và `build <nhãn giờ>`
   để biết đang chạy bản mới hay cũ (version app luôn là `21.44.4`).
 - **Phát nền / PiP**: ép `isBackgroundableByUserSettings` /
@@ -38,6 +45,8 @@ mods/youtube/
 │   ├── common.h          khai báo chung
 │   ├── config.mm         NSUserDefaults + log Documents/Logs/<ngày>.log
 │   ├── hooks.h           bảng hook + API cài đặt
+│   ├── adblock.mm        chặn ads player/InnerTube
+│   ├── promo.mm          chặn ads feed + promo/upsell Premium
 │   ├── hook_impls.mm     thân hook + YTM_HOOKS (class/selector/type encoding)
 │   ├── hooks.mm          swizzling bằng ObjC runtime, đọc cấu hình
 │   ├── menu.mm           menu nổi UIKit
