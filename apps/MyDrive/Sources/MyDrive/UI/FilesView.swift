@@ -96,7 +96,6 @@ struct FilesView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                SyncStatusBanner(status: engine.status)
                 List {
                     if path.isEmpty && searchText.isEmpty {
                         trashRow
@@ -244,9 +243,7 @@ struct FilesView: View {
             }
         }
         ToolbarItem(placement: .topBarLeading) {
-            if engine.status.isWorking {
-                ProgressView()
-            } else if searchText.isEmpty {
+            if searchText.isEmpty {
                 Menu {
                     ForEach(SortOption.allCases) { opt in
                         Button {

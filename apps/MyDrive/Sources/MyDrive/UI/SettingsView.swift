@@ -13,9 +13,16 @@ struct SettingsView: View {
                     Button {
                         engine.syncNow()
                     } label: {
-                        Label(engine.status.isWorking ? "Đang đồng bộ…" : "Đồng bộ ngay", systemImage: "arrow.triangle.2.circlepath")
+                        HStack {
+                            Label(engine.status.isWorking ? "Đang đồng bộ…" : "Đồng bộ ngay", systemImage: "arrow.triangle.2.circlepath")
+                            Spacer()
+                            if engine.status.isWorking {
+                                ProgressView()
+                            }
+                        }
                     }
                     .disabled(engine.status.isWorking)
+                    syncStateRows
                     if let last = engine.lastSyncAt {
                         LabeledRow("Lần sync cuối", last.formatted(date: .abbreviated, time: .standard))
                     }
@@ -62,6 +69,43 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Cài đặt")
+        }
+    }
+}
+
+/// Hàng trạng thái sync (trước đây là băng trên tab Tệp — đã dồn hết về đây).
+private extension SettingsView {
+    @ViewBuilder
+    var syncStateRows: some View {
+        if engine.status.isWorking {
+            Label {
+                Text(engine.status.text)
+            } icon: {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .foregroundStyle(.secondary)
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        }
+        if case let .error(msg) = engine.status.phase {
+            Label {
+                Text(msg)
+            } icon: {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        }
+        if !engine.status.needsReauth.isEmpty {
+            Label {
+                Text("Cần đăng nhập lại: \(engine.status.needsReauth.joined(separator: ", "))")
+            } icon: {
+                Image(systemName: "person.badge.clock")
+                    .foregroundStyle(.orange)
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
         }
     }
 }
