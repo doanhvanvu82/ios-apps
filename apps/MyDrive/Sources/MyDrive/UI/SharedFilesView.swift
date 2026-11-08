@@ -24,7 +24,19 @@ struct SharedFilesView: View {
     @State private var previewURL: URL?
     /// Đang nhập kho nền (spinner che thao tác, UI vẫn mượt).
     @State private var importing = false
+    /// Xử lý xung đột tên khi nhập: mục trùng + quyết định người dùng
+    /// (nil = chưa hỏi; giá trị áp dụng cho TẤT CẢ trùng còn lại trong lô —
+    /// như Files: hỏi 1 lần rồi "áp dụng cho tất cả").
+    @State private var pendingConflicts: [String]?
+    @State private var conflictResolution: ConflictResolution?
     @StateObject private var store = FileSystemStore.shared
+
+    /// Quyết định khi tên trùng (giống Files).
+    enum ConflictResolution {
+        case keepBoth    // giữ cả hai — mục mới thành "tên (2)"
+        case replace     // ghi đè mục cũ bằng mục mới
+        case skip        // bỏ qua mục mới
+    }
 
     var body: some View {
         List {
@@ -60,6 +72,7 @@ struct SharedFilesView: View {
         }
         .sheet(isPresented: Binding(get: { pendingMove != nil }, set: { if !$0 { pendingMove = nil } })) {
             FolderPicker(store: store, currentPath: [], title: "Di chuyển \(pendingMove?.count ?? 0) mục vào MyDrive") { dest in
+                moveDestination = dest
                 moveSelected(to: dest)
                 pendingMove = nil
             }
@@ -96,7 +109,42 @@ struct SharedFilesView: View {
                     .ignoresSafeArea()
             }
         }
+        .alert("Mục trùng tên", isPresented: Binding(
+            get: { pendingConflicts != nil && conflictResolution == nil },
+            set: { if !$0 { pendingConflicts = nil } }
+        )) {
+            Button("Giữ cả hai") {
+                resolveConflicts(.keepBoth)
+            }
+            Button("Thay thế", role: .destructive) {
+                resolveConflicts(.replace)
+            }
+            Button("Bỏ qua", role: .cancel) {
+                resolveConflicts(.skip)
+            }
+        } message: {
+            let names = pendingConflicts ?? []
+            if names.count == 1 {
+                Text("\"\(names[0])\" đã tồn tại ở đích. Bạn muốn làm gì?")
+            } else {
+                let examples = names.prefix(2).joined(separator: ", ")
+                Text("\(names.count) mục trùng tên (vd \"\(examples)\") đã tồn tại ở đích. Quyết định sẽ áp dụng cho tất cả.")
+            }
+        }
     }
+
+    /// Người dùng đã chọn cách xử lý trùng — bắt đầu nhập kho thật.
+    private func resolveConflicts(_ resolution: ConflictResolution) {
+        conflictResolution = resolution
+        guard let conflicts = pendingConflicts else { return }
+        // Tất cả mục (trùng + không trùng) đều nhập; resolution áp cho mục trùng.
+        let all = selectionMode ? Array(selected) : items.map(\.name)
+        beginImport(names: all, dest: moveDestination, resolution: resolution)
+        pendingConflicts = nil
+    }
+
+    /// Đích hiện tại của pendingMove (lưu khi FolderPicker chọn).
+    @State private var moveDestination: [String] = []
 
     /// Nút "Di chuyển vào MyDrive" — hành động chính của tab.
     private var moveButton: some View {
@@ -196,11 +244,31 @@ struct SharedFilesView: View {
             }
     }
 
-    /// Nhập kho: move cả cây vào mirror tại đích, đăng ký index/journal từng cấp.
-    /// Chạy TRÊN NỀN (Task.detached) — copy file lớn không chặn UI (giống Files:
-    /// thao tác nào cũng mượt, UI chỉ hiện spinner rồi cập nhật khi xong).
+    /// Nhập kho: PHA 1 (main) phát hiện trùng tên → hỏi người dùng (giống Files:
+    /// "Giữ cả hai" / "Thay thế" / "Bỏ qua", áp dụng cho cả lô); PHA 2 (nền) nhập.
     private func moveSelected(to dest: [String]) {
         let names = selectionMode && !selected.isEmpty ? Array(selected) : items.map(\.name)
+        // Phát hiện trùng: đích đã có (mirror/index) HOẶC trùng nhau trong lô.
+        var seen = Set<String>()
+        var conflicts: [String] = []
+        for name in names {
+            let exists = store.exists(at: dest + [name])
+                || IndexStore.shared.node(at: (dest + [name]).joined(separator: "/")) != nil
+            if exists || !seen.insert(name).inserted {
+                conflicts.append(name)
+            }
+        }
+        if !conflicts.isEmpty {
+            // Hỏi trước khi làm gì cả — quyết định áp dụng cho cả lô.
+            pendingConflicts = conflicts
+            conflictResolution = nil
+            return
+        }
+        beginImport(names: names, dest: dest, resolution: .keepBoth)
+    }
+
+    /// PHA 2: nền nhập kho với quyết định xung đột đã chọn.
+    private func beginImport(names: [String], dest: [String], resolution: ConflictResolution) {
         selectionMode = false
         selected = []
         importing = true
@@ -209,21 +277,40 @@ struct SharedFilesView: View {
             for name in names {
                 let src = AppPaths.sharedFiles.appendingPathComponent(name)
                 guard FileManager.default.fileExists(atPath: src.path) else { continue }
-                // Tên cuối: tránh trùng ngay từ background (đọc index — thread-safe
-                // qua serial queue bên trong IndexStore).
-                var finalName = name
-                var n = 2
-                while store.exists(at: dest + [finalName])
-                    || IndexStore.shared.node(at: (dest + [finalName]).joined(separator: "/")) != nil {
-                    let base = (name as NSString).deletingPathExtension
-                    let ext = (name as NSString).pathExtension
-                    finalName = ext.isEmpty ? "\(base) (\(n))" : "\(base) (\(n)).\(ext)"
-                    n += 1
-                    if n > 999 { break }
+                let targetName: String
+                switch resolution {
+                case .replace:
+                    targetName = name
+                case .keepBoth, .skip:
+                    // keepBoth: trùng thật → "tên (2)"; skip: đặt tên tạm để loop
+                    // dưới phát hiện trùng và bỏ qua (không nhập).
+                    var n = 2
+                    var candidate = name
+                    let isDuplicate = store.exists(at: dest + [name])
+                        || IndexStore.shared.node(at: (dest + [name]).joined(separator: "/")) != nil
+                    if resolution == .skip && isDuplicate {
+                        AppLog.log("shared", "⏭️ Bỏ qua (trùng, người dùng chọn bỏ qua): \(name)")
+                        continue
+                    }
+                    while store.exists(at: dest + [candidate])
+                        || IndexStore.shared.node(at: (dest + [candidate]).joined(separator: "/")) != nil {
+                        let base = (name as NSString).deletingPathExtension
+                        let ext = (name as NSString).pathExtension
+                        candidate = ext.isEmpty ? "\(base) (\(n))" : "\(base) (\(n)).\(ext)"
+                        n += 1
+                        if n > 999 { break }
+                    }
+                    targetName = candidate
                 }
-                let target = dest + [finalName]
+                let target = dest + [targetName]
                 let isDir = ((try? src.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory) ?? false
                 do {
+                    // Replace: xóa mục cũ (mirror + index) trước khi nhập.
+                    if resolution == .replace && store.exists(at: target) {
+                        try? store.remove(at: target)
+                        IndexStore.shared.remove(path: target.joined(separator: "/"))
+                        IndexStore.shared.removeTree(prefix: target.joined(separator: "/") + "/")
+                    }
                     if isDir {
                         try store.copyDirectory(from: src, to: target)
                         try FileManager.default.removeItem(at: src)
@@ -246,6 +333,12 @@ struct SharedFilesView: View {
                 SyncEngine.triggerSyncPublic()
             }
         }
+    }
+
+    /// Alert hỏi quyết định khi có trùng (như Files: Giữ cả hai / Thay thế / Bỏ qua).
+    private var conflictAlert: some View {
+        // (được gắn trong body qua .alert — xem dưới)
+        EmptyView()
     }
 
     /// Đăng ký file vừa nhập (static — gọi từ background).
