@@ -34,6 +34,7 @@ static id h_readIdentity(id s, SEL c) {
 // SSOIdentity từ auth object. Log auth trước khi tạo identity.
 static IMP _o_identityWithAuth;
 static id h_identityWithAuth(id s, SEL c, id auth) {
+    id identity = ((id (*)(id, SEL, id))_o_identityWithAuth)(s, c, auth);
     @try {
         NSString *email = nil, *uid = nil;
         if ([auth respondsToSelector:@selector(userEmail)]) {
@@ -42,19 +43,20 @@ static id h_identityWithAuth(id s, SEL c, id auth) {
         if ([auth respondsToSelector:@selector(userID)]) {
             uid = ((NSString *(*)(id, SEL))objc_msgSend)(auth, @selector(userID));
         }
-        BOOL valid = NO;
-        if ([auth respondsToSelector:@selector(hasValidAuth)]) {
-            valid = ((BOOL (*)(id, SEL))objc_msgSend)(auth, @selector(hasValidAuth));
+        NSString *outUid = nil;
+        if ([identity respondsToSelector:@selector(userID)]) {
+            outUid = ((NSString *(*)(id, SEL))objc_msgSend)(identity, @selector(userID));
         }
         static int n = 0;
         if (n < 20) {
             n++;
-            YTModLog(@"login: identityWithAuth email=%@ uid=%@ valid=%d auth=%@",
-                     email ?: @"(nil)", uid ?: @"(nil)", valid,
-                     NSStringFromClass(object_getClass(auth ?: nil)));
+            YTModLog(@"login: identityWithAuth email=%@ uid=%@ → identity %@ (uid=%@, class %@)",
+                     email ?: @"(nil)", uid ?: @"(nil)",
+                     identity ? @"CÓ" : @"NIL", outUid ?: @"(nil)",
+                     identity ? NSStringFromClass(object_getClass(identity)) : @"-");
         }
     } @catch (__unused NSException *e) {}
-    return ((id (*)(id, SEL, id))_o_identityWithAuth)(s, c, auth);
+    return identity;
 }
 
 // SSOService.forget* — nếu YouTube TỰ XOÁ identity (invalidGrant → thu hồi token),
