@@ -80,6 +80,9 @@ void YTUISweepInstall(void);
 // Chẩn đoán mất login: log cookie SSO mỗi lần app vào foreground.
 void YTKeychainDiagInstall(void);
 
+// Sửa mất login khi ký lại bằng team khác (keychain group + app group).
+void YTSideloadFixInstall(void);
+
 #ifdef __cplusplus
 }
 #endif

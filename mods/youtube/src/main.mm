@@ -22,6 +22,8 @@ static void ytm_did_finish_launch(void) {
 __attribute__((constructor)) static void ytm_init(void) {
     YTModLogOpen();
     YTModLog(@"dylib nạp (mod %s, build %s)", YT_VERSION_TAG, YT_BUILD_LABEL);
+    // Keychain/app group phải sửa trước khi app đọc token lúc khởi động.
+    YTSideloadFixInstall();
 #ifdef YT_NO_HOOKS
     // Biến thể chia đôi lỗi mất login: dylib nạp nhưng không cài hook nào.
     YTModLog(@"VARIANT nohook: bỏ qua mọi hook");

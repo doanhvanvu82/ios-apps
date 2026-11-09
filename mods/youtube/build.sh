@@ -29,7 +29,7 @@ WORK="$HERE/work"
 OUT="$HERE/out"
 APP_NAME="YouTube"
 DYLIB_NAME="libyoutubemod.dylib"
-MOD_VERSION="${MOD_VERSION:-3.29}"
+MOD_VERSION="${MOD_VERSION:-3.30}"
 VARIANT="${VARIANT:-full}"
 case "$VARIANT" in full|nohook|nodylib) ;; *) echo "❌ VARIANT lạ: $VARIANT (full|nohook|nodylib)" >&2; exit 1 ;; esac
 # Nhãn build hiển thị trong menu (biết đang dùng bản mới hay cũ).
@@ -181,7 +181,7 @@ build_dylib() {
   [ -n "$LD" ] && link_args+=("--ld-path=$LD")
   "$CLANG" -target arm64-apple-ios17.0 -isysroot "$SDK" ${link_args[@]+"${link_args[@]}"} \
     -dynamiclib -o "$out" "${objs[@]}" \
-    -framework Foundation -framework UIKit -framework CoreFoundation \
+    -framework Foundation -framework UIKit -framework CoreFoundation -framework Security \
     -install_name "@executable_path/Frameworks/$DYLIB_NAME" \
     -undefined dynamic_lookup \
     -Wl,-arch,arm64 -Wl,-platform_version,ios,17.0,17.0
