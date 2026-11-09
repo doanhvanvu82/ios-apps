@@ -30,6 +30,33 @@ static id h_readIdentity(id s, SEL c) {
     return v;
 }
 
+// SSOService.identityWithAuth: (@24@0:8@16) — flow login gọi hàm này để tạo
+// SSOIdentity từ auth object. Log auth trước khi tạo identity.
+static IMP _o_identityWithAuth;
+static id h_identityWithAuth(id s, SEL c, id auth) {
+    @try {
+        NSString *email = nil, *uid = nil;
+        if ([auth respondsToSelector:@selector(userEmail)]) {
+            email = ((NSString *(*)(id, SEL))objc_msgSend)(auth, @selector(userEmail));
+        }
+        if ([auth respondsToSelector:@selector(userID)]) {
+            uid = ((NSString *(*)(id, SEL))objc_msgSend)(auth, @selector(userID));
+        }
+        BOOL valid = NO;
+        if ([auth respondsToSelector:@selector(hasValidAuth)]) {
+            valid = ((BOOL (*)(id, SEL))objc_msgSend)(auth, @selector(hasValidAuth));
+        }
+        static int n = 0;
+        if (n < 20) {
+            n++;
+            YTModLog(@"login: identityWithAuth email=%@ uid=%@ valid=%d auth=%@",
+                     email ?: @"(nil)", uid ?: @"(nil)", valid,
+                     NSStringFromClass(object_getClass(auth ?: nil)));
+        }
+    } @catch (__unused NSException *e) {}
+    return ((id (*)(id, SEL, id))_o_identityWithAuth)(s, c, auth);
+}
+
 // setCurrentIdentity: v24@0:8@16 — YouTube gán identity sau login; log userID
 // để biết identity có thật được gắn vào store không (GHI nil = currentIdentity
 // nil lúc store → identity chưa được gán).
@@ -89,6 +116,14 @@ void YTKeychainDiagInstall(void) {
             _o_storeIdentity = method_getImplementation(m2);
             class_replaceMethod(cls, sel_registerName("storeCurrentIdentityToDisk"),
                                 (IMP)h_storeIdentity, method_getTypeEncoding(m2));
+        }
+        Class ssoCls = objc_getClass("SSOService");
+        Method m4 = ssoCls ? class_getInstanceMethod(ssoCls, sel_registerName("identityWithAuth:")) : NULL;
+        if (m4) {
+            _o_identityWithAuth = method_getImplementation(m4);
+            class_replaceMethod(ssoCls, sel_registerName("identityWithAuth:"),
+                                (IMP)h_identityWithAuth, method_getTypeEncoding(m4));
+            YTModLog(@"identity-diag: hook SSOService.identityWithAuth OK");
         }
         Method m3 = class_getInstanceMethod(cls, sel_registerName("setCurrentIdentity:"));
         if (m3) {
