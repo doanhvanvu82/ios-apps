@@ -24,25 +24,12 @@ static OSStatus (*o_SecItemCopyMatching)(CFDictionaryRef, CFTypeRef *);
 static OSStatus (*o_SecItemUpdate)(CFDictionaryRef, CFDictionaryRef);
 static OSStatus (*o_SecItemDelete)(CFDictionaryRef);
 
-static int g_kcLogged = 0;
-
 static CFDictionaryRef ytm_strip_group(CFDictionaryRef d) {
     if (!d) return NULL;
     if (!CFDictionaryContainsKey(d, kSecAttrAccessGroup)) return (CFDictionaryRef)CFRetain(d);
     CFMutableDictionaryRef m = CFDictionaryCreateMutableCopy(NULL, 0, d);
     CFDictionaryRemoveValue(m, kSecAttrAccessGroup);
     return m;
-}
-
-static void ytm_kc_log(const char *fn, CFDictionaryRef q, OSStatus st) {
-    // Chỉ log lỗi + vài lượt đầu: SecItem* chạy rất nhiều lần mỗi phiên.
-    if (st == errSecSuccess && g_kcLogged >= 10) return;
-    if (st != errSecSuccess && st != errSecItemNotFound && g_kcLogged >= 60) return;
-    g_kcLogged++;
-    NSDictionary *d = (__bridge NSDictionary *)q;
-    YTModLog(@"keychain: %s service=%@ group=%@ → %d", fn,
-             d[(__bridge id)kSecAttrService] ?: @"-",
-             d[(__bridge id)kSecAttrAccessGroup] ?: @"-", (int)st);
 }
 
 static void ytm_cfrelease(CFTypeRef v) {
@@ -52,7 +39,6 @@ static void ytm_cfrelease(CFTypeRef v) {
 static OSStatus h_SecItemAdd(CFDictionaryRef a, CFTypeRef *r) {
     CFDictionaryRef s = ytm_strip_group(a);
     OSStatus st = o_SecItemAdd(s, r);
-    ytm_kc_log("Add", a, st);
     ytm_cfrelease(s);
     return st;
 }
@@ -60,7 +46,6 @@ static OSStatus h_SecItemAdd(CFDictionaryRef a, CFTypeRef *r) {
 static OSStatus h_SecItemCopyMatching(CFDictionaryRef q, CFTypeRef *r) {
     CFDictionaryRef s = ytm_strip_group(q);
     OSStatus st = o_SecItemCopyMatching(s, r);
-    ytm_kc_log("CopyMatching", q, st);
     ytm_cfrelease(s);
     return st;
 }
@@ -68,7 +53,6 @@ static OSStatus h_SecItemCopyMatching(CFDictionaryRef q, CFTypeRef *r) {
 static OSStatus h_SecItemUpdate(CFDictionaryRef q, CFDictionaryRef a) {
     CFDictionaryRef sq = ytm_strip_group(q), sa = ytm_strip_group(a);
     OSStatus st = o_SecItemUpdate(sq, sa);
-    ytm_kc_log("Update", q, st);
     ytm_cfrelease(sq);
     ytm_cfrelease(sa);
     return st;
@@ -77,7 +61,6 @@ static OSStatus h_SecItemUpdate(CFDictionaryRef q, CFDictionaryRef a) {
 static OSStatus h_SecItemDelete(CFDictionaryRef q) {
     CFDictionaryRef s = ytm_strip_group(q);
     OSStatus st = o_SecItemDelete(s);
-    ytm_kc_log("Delete", q, st);
     ytm_cfrelease(s);
     return st;
 }
@@ -149,10 +132,9 @@ static void ytm_rebind_keychain(void) {
         if (!name || !strstr(name, bundle.UTF8String) || strstr(name, "libyoutubemod")) continue;
         int hits = ytm_rebind_image((const struct mach_header_64 *)_dyld_get_image_header(i),
                                     _dyld_get_image_vmaddr_slide(i), rb, 4);
-        if (hits) YTModLog(@"sideloadfix: %d slot SecItem* trong %s", hits, strrchr(name, '/') + 1);
         total += hits;
     }
-    YTModLog(@"sideloadfix: keychain %@ (%d slot)", total ? @"OK" : @"MISS", total);
+    if (!total) YTModLog(@"sideloadfix: keychain MISS (không thấy slot SecItem*)");
 }
 
 static IMP o_containerURL;
@@ -164,15 +146,6 @@ static NSURL *h_containerURL(id s, SEL c, NSString *group) {
     u = [[lib URLByAppendingPathComponent:@"AppGroups" isDirectory:YES]
             URLByAppendingPathComponent:group isDirectory:YES];
     [[NSFileManager defaultManager] createDirectoryAtURL:u withIntermediateDirectories:YES attributes:nil error:NULL];
-    static NSMutableSet *logged;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ logged = [NSMutableSet set]; });
-    @synchronized (logged) {
-        if (![logged containsObject:group]) {
-            [logged addObject:group];
-            YTModLog(@"sideloadfix: app group %@ → container app", group);
-        }
-    }
     return u;
 }
 
@@ -184,7 +157,6 @@ void YTSideloadFixInstall(void) {
                                            @selector(containerURLForSecurityApplicationGroupIdentifier:));
         if (m) {
             o_containerURL = method_setImplementation(m, (IMP)h_containerURL);
-            YTModLog(@"sideloadfix: hook containerURLForSecurityApplicationGroupIdentifier OK");
         }
     });
 }

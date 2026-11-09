@@ -63,14 +63,6 @@ static BOOL ytm_item_is_ad(id item) {
     return ytm_has(item, "hasElementRenderer") && ytm_element_is_ad(ytm_get(item, "elementRenderer"));
 }
 
-static int g_removed = 0;
-
-static void ytm_log_removed(NSUInteger n, const char *where) {
-    if (!n) return;
-    g_removed += (int)n;
-    if (g_removed <= 200) YTModLog(@"feed: bỏ %lu mục quảng cáo (%s, tổng %d)", (unsigned long)n, where, g_removed);
-}
-
 // Section quảng cáo → YES (bỏ cả section). Section lẫn nội dung thường → lọc
 // mục quảng cáo bên trong, giữ section.
 static BOOL ytm_section_is_ad(id section) {
@@ -86,7 +78,6 @@ static BOOL ytm_section_is_ad(id section) {
         }];
         if (ads.count && ads.count < items.count) {
             [items removeObjectsAtIndexes:ads];
-            ytm_log_removed(ads.count, "trong section");
             return NO;
         }
     }
@@ -112,9 +103,7 @@ static void h_displaySections(id s, SEL c, id renderer) {
     if (YTAdsOffEnabled() && g_sectionsIvar) {
         id sections = object_getIvar(s, g_sectionsIvar);
         if ([sections isKindOfClass:[NSMutableArray class]]) {
-            NSIndexSet *ads = ytm_ad_sections(sections);
-            [(NSMutableArray *)sections removeObjectsAtIndexes:ads];
-            ytm_log_removed(ads.count, "tải trang");
+            [(NSMutableArray *)sections removeObjectsAtIndexes:ytm_ad_sections(sections)];
         }
     }
     ((void (*)(id, SEL, id))_o_displaySections)(s, c, renderer);
@@ -128,7 +117,6 @@ static void h_addSections(id s, SEL c, NSArray *array) {
         if (ads.count) {
             NSMutableArray *clean = [array mutableCopy];
             [clean removeObjectsAtIndexes:ads];
-            ytm_log_removed(ads.count, "cuộn thêm");
             array = clean;
         }
     }
@@ -149,7 +137,6 @@ static BOOL ytm_feed_hook(Class cls, const char *sel, IMP hook, IMP *orig) {
     }
     *orig = method_getImplementation(m);
     class_replaceMethod(cls, sel_registerName(sel), hook, types);
-    YTModLog(@"feed OK  %s (%s)", sel, types);
     return YES;
 }
 

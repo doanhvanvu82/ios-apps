@@ -68,7 +68,6 @@ int YTHooksInstall(void) {
         for (int i = 0; i < YTM_HOOK_COUNT; i++) {
             if (ytm_swizzle(&YTM_HOOKS[i])) {
                 g_installed++;
-                YTModLog(@"hook OK  %s", YTM_HOOKS[i].label);
             } else {
                 g_failed++;
                 YTModLog(@"hook MISS %s", YTM_HOOKS[i].label);
@@ -90,5 +89,4 @@ void YTHooksApplyConfig(void) {
     g_adsOff = YTModBool(YTKeyAdsOff, YES);
     g_background = YTModBool(YTKeyBackground, YES);
     g_pip = YTModBool(YTKeyPiP, YES);
-    YTModLog(@"config: ads_off=%d background=%d pip=%d", g_adsOff, g_background, g_pip);
 }

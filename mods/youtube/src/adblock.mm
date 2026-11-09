@@ -27,45 +27,31 @@
 #import <objc/runtime.h>
 #import <UIKit/UIKit.h>
 
-enum { YTMAdSkip = 0, YTMAdEmptyArray, YTMAdNil, YTMAdNo };
-
 typedef struct {
     const char *cls;
     const char *sel;
-    int kind;
     IMP hook;
     IMP *orig;
-    const char *label;
 } YTMAdHook;
-
-static int g_hitCount[32];
-
-static void ytm_ad_hit(int idx, const char *label) {
-    if (idx < 0 || idx >= 32) return;
-    if (g_hitCount[idx] < 3) {
-        g_hitCount[idx]++;
-        YTModLog(@"ads: CHẶN %s (lần %d)", label, g_hitCount[idx]);
-    }
-}
 
 // --- TẦNG GỐC: ads context decorator ---------------------------------------
 // decorateContext:serviceType: có tham số 2 là int64 (q) — truyền bằng thanh
 // ghi 64-bit như id nên khai báo int64_t cho đúng nghĩa.
 static IMP _o_decorateContext;
 static void h_decorateContext(id s, SEL c, id ctx, int64_t serviceType) {
-    if (YTAdsOffEnabled()) { ytm_ad_hit(0, "ads ctx decorate"); return; }
+    if (YTAdsOffEnabled()) return;
     ((void (*)(id, SEL, id, int64_t))_o_decorateContext)(s, c, ctx, serviceType);
 }
 
 static IMP _o_decorateShield;
 static void h_decorateShield(id s, SEL c, id a1) {
-    if (YTAdsOffEnabled()) { ytm_ad_hit(1, "ads ctx shield"); return; }
+    if (YTAdsOffEnabled()) return;
     ((void (*)(id, SEL, id))_o_decorateShield)(s, c, a1);
 }
 
 static IMP _o_decorateIDFA;
 static void h_decorateIDFA(id s, SEL c, id a1) {
-    if (YTAdsOffEnabled()) { ytm_ad_hit(2, "ads ctx idfa"); return; }
+    if (YTAdsOffEnabled()) return;
     ((void (*)(id, SEL, id))_o_decorateIDFA)(s, c, a1);
 }
 
@@ -76,98 +62,62 @@ static void h_decorateIDFA(id s, SEL c, id a1) {
 // Việc chặn preroll đã nằm ở tầng context decorator phía trên.
 static IMP _o_cellDidLoad;
 static void h_cellDidLoad(id s, SEL c, id a1) {
-    if (YTAdsOffEnabled()) { ytm_ad_hit(8, "ad cell didLoadRenderer"); return; }
+    if (YTAdsOffEnabled()) return;
     ((void (*)(id, SEL, id))_o_cellDidLoad)(s, c, a1);
 }
 
 static IMP _o_cellBindSlot;
 static void h_cellBindSlot(id s, SEL c, id a1, id a2) {
-    if (YTAdsOffEnabled()) { ytm_ad_hit(9, "ad cell didBindSlotData"); return; }
+    if (YTAdsOffEnabled()) return;
     ((void (*)(id, SEL, id, id))_o_cellBindSlot)(s, c, a1, a2);
-}
-
-// --- Getter cờ monetized → NO (YTLite): server coi phiên không có quảng cáo --
-static IMP _o_isMonetized;
-static BOOL h_isMonetized(id s, SEL c) {
-    if (YTAdsOffEnabled()) { ytm_ad_hit(3, "isMonetized=NO"); return NO; }
-    return ((BOOL (*)(id, SEL))_o_isMonetized)(s, c);
-}
-
-static IMP _o_hasPrerollAds;
-static BOOL h_hasPrerollAds(id s, SEL c) {
-    if (YTAdsOffEnabled()) { ytm_ad_hit(4, "hasPrerollAds=NO"); return NO; }
-    return ((BOOL (*)(id, SEL))_o_hasPrerollAds)(s, c);
-}
-
-static IMP _o_cuepointAdsEnabled;
-static BOOL h_cuepointAdsEnabled(id s, SEL c) {
-    if (YTAdsOffEnabled()) { ytm_ad_hit(5, "isCuepointAdsEnabled=NO"); return NO; }
-    return ((BOOL (*)(id, SEL))_o_cuepointAdsEnabled)(s, c);
 }
 
 // --- Getter danh sách ad → rỗng --------------------------------------------
 static IMP _o_adSlotRenderers;
 static id h_adSlotRenderers(id s, SEL c) {
-    if (YTAdsOffEnabled()) { ytm_ad_hit(10, "adSlotRenderers=[]"); return @[]; }
+    if (YTAdsOffEnabled()) return @[];
     return ((id (*)(id, SEL))_o_adSlotRenderers)(s, c);
 }
 
 static IMP _o_decorateContextAcct;
 static void h_decorateContextAcct(id s, SEL c, id ctx, int64_t serviceType) {
-    if (YTAdsOffEnabled()) { ytm_ad_hit(13, "account ads ctx decorate"); return; }
+    if (YTAdsOffEnabled()) return;
     ((void (*)(id, SEL, id, int64_t))_o_decorateContextAcct)(s, c, ctx, serviceType);
 }
 
 static IMP _o_decorateShieldAcct;
 static void h_decorateShieldAcct(id s, SEL c, id a1) {
-    if (YTAdsOffEnabled()) { ytm_ad_hit(14, "account ads ctx shield"); return; }
+    if (YTAdsOffEnabled()) return;
     ((void (*)(id, SEL, id))_o_decorateShieldAcct)(s, c, a1);
 }
 
 static IMP _o_decorateIDFAAcct;
 static void h_decorateIDFAAcct(id s, SEL c, id a1) {
-    if (YTAdsOffEnabled()) { ytm_ad_hit(15, "account ads ctx idfa"); return; }
+    if (YTAdsOffEnabled()) return;
     ((void (*)(id, SEL, id))_o_decorateIDFAAcct)(s, c, a1);
 }
 
-#define ADHOOK(CLS, SEL, KIND, FN, ORIG, LABEL) \
-    { CLS, SEL, KIND, (IMP)FN, &ORIG, LABEL }
+#define ADHOOK(CLS, SEL, FN, ORIG) { CLS, SEL, (IMP)FN, &ORIG }
 
 // Hook theo tên class cố định. Decorator được hook động (xem dưới) vì 21.44.4
 // có nhiều lớp generated impl kế thừa.
 static const YTMAdHook YTM_AD_HOOKS[] = {
-    ADHOOK("YTAdsInnerTubeContextDecoratorImpl", "decorateContext:serviceType:",
-           YTMAdSkip, h_decorateContext, _o_decorateContext, "ads ctx decorate"),
-    ADHOOK("YTAdsInnerTubeContextDecoratorImpl", "decorateContextWithAdShieldSignals:",
-           YTMAdSkip, h_decorateShield, _o_decorateShield, "ads ctx shield"),
-    ADHOOK("YTAdsInnerTubeContextDecoratorImpl", "decorateContextWithIDFA:",
-           YTMAdSkip, h_decorateIDFA, _o_decorateIDFA, "ads ctx idfa"),
-    ADHOOK("YTAccountScopedAdsInnerTubeContextDecorator", "decorateContext:serviceType:",
-           YTMAdSkip, h_decorateContextAcct, _o_decorateContextAcct, "account ads ctx decorate"),
-    ADHOOK("YTAccountScopedAdsInnerTubeContextDecorator", "decorateContextWithAdShieldSignals:",
-           YTMAdSkip, h_decorateShieldAcct, _o_decorateShieldAcct, "account ads ctx shield"),
-    ADHOOK("YTAccountScopedAdsInnerTubeContextDecorator", "decorateContextWithIDFA:",
-           YTMAdSkip, h_decorateIDFAAcct, _o_decorateIDFAAcct, "account ads ctx idfa"),
-    ADHOOK("YTAdElementsCellAPIImpl", "didLoadRenderer:", YTMAdSkip,
-           h_cellDidLoad, _o_cellDidLoad, "ad cell didLoadRenderer"),
-    ADHOOK("YTAdElementsCellExternallyManagedSlotAdapterImpl",
-           "didBindSlotData:layoutData:", YTMAdSkip,
-           h_cellBindSlot, _o_cellBindSlot, "ad cell didBindSlotData"),
-    ADHOOK("YTAdClientOrganicMetadata", "adSlotRenderers", YTMAdEmptyArray,
-           h_adSlotRenderers, _o_adSlotRenderers, "adSlotRenderers=[]"),
-    ADHOOK("YTIPlayerResponse", "isMonetized", YTMAdNo,
-           h_isMonetized, _o_isMonetized, "isMonetized=NO"),
-    ADHOOK("YTIPlayerResponse", "hasPrerollAds", YTMAdNo,
-           h_hasPrerollAds, _o_hasPrerollAds, "hasPrerollAds=NO"),
-    ADHOOK("YTIPlayerResponse", "isCuepointAdsEnabled", YTMAdNo,
-           h_cuepointAdsEnabled, _o_cuepointAdsEnabled, "isCuepointAdsEnabled=NO"),
+    ADHOOK("YTAdsInnerTubeContextDecoratorImpl", "decorateContext:serviceType:", h_decorateContext, _o_decorateContext),
+    ADHOOK("YTAdsInnerTubeContextDecoratorImpl", "decorateContextWithAdShieldSignals:", h_decorateShield, _o_decorateShield),
+    ADHOOK("YTAdsInnerTubeContextDecoratorImpl", "decorateContextWithIDFA:", h_decorateIDFA, _o_decorateIDFA),
+    ADHOOK("YTAccountScopedAdsInnerTubeContextDecorator", "decorateContext:serviceType:", h_decorateContextAcct, _o_decorateContextAcct),
+    ADHOOK("YTAccountScopedAdsInnerTubeContextDecorator", "decorateContextWithAdShieldSignals:", h_decorateShieldAcct, _o_decorateShieldAcct),
+    ADHOOK("YTAccountScopedAdsInnerTubeContextDecorator", "decorateContextWithIDFA:", h_decorateIDFAAcct, _o_decorateIDFAAcct),
+    ADHOOK("YTAdElementsCellAPIImpl", "didLoadRenderer:", h_cellDidLoad, _o_cellDidLoad),
+    ADHOOK("YTAdElementsCellExternallyManagedSlotAdapterImpl", "didBindSlotData:layoutData:", h_cellBindSlot, _o_cellBindSlot),
+    ADHOOK("YTAdClientOrganicMetadata", "adSlotRenderers", h_adSlotRenderers, _o_adSlotRenderers),
 };
 
 #define YTM_AD_HOOK_COUNT ((int)(sizeof(YTM_AD_HOOKS) / sizeof(YTM_AD_HOOKS[0])))
 
 static BOOL g_adDone[YTM_AD_HOOK_COUNT];
 
-static int ytm_ad_install_pass(BOOL verbose) {
+static int ytm_ad_install_pass(void) {
     int done = 0;
     for (int i = 0; i < YTM_AD_HOOK_COUNT; i++) {
         if (g_adDone[i]) { done++; continue; }
@@ -175,17 +125,12 @@ static int ytm_ad_install_pass(BOOL verbose) {
         Class cls = objc_getClass(h->cls);
         if (!cls) continue;
         Method m = class_getInstanceMethod(cls, sel_registerName(h->sel));
-        if (!m) {
-            if (verbose) YTModLog(@"ads MISS %s %s", h->cls, h->sel);
-            continue;
-        }
+        if (!m) continue;
         *h->orig = method_getImplementation(m);
         class_replaceMethod(cls, sel_registerName(h->sel), h->hook, method_getTypeEncoding(m));
         g_adDone[i] = YES;
         done++;
-        if (verbose) YTModLog(@"ads OK  %s", h->label);
     }
-    done += 0;
     return done;
 }
 
@@ -193,13 +138,14 @@ void YTAdBlockInstall(void) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         YTAdsOffEnabled(); // nạp công tắc
-        int n = ytm_ad_install_pass(YES);
-        YTModLog(@"ads: %d hook ngay (module còn lại cài sau)", n);
+        ytm_ad_install_pass();
         // Module ad của YouTube tải lười sau khi có player/feed → thử lại vài mốc.
         for (double t = 2.0; t <= 20.0; t += 2.0) {
+            BOOL last = t >= 20.0;
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(t * NSEC_PER_SEC)),
                            dispatch_get_main_queue(), ^{
-                ytm_ad_install_pass(NO);
+                int n = ytm_ad_install_pass();
+                if (last && n < YTM_AD_HOOK_COUNT) YTModLog(@"ads: chỉ cài %d/%d hook", n, YTM_AD_HOOK_COUNT);
             });
         }
     });

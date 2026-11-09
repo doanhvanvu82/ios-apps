@@ -10,7 +10,6 @@
 #import <objc/message.h>
 
 static __weak id g_pipController = nil;
-static BOOL g_autoPiPInstalled = NO;
 
 static void ytm_remember_pip_controller(id obj) {
     if (obj) g_pipController = obj;
@@ -34,30 +33,20 @@ static void h_pipSetActiveVideo(id s, SEL c, id video) {
 static void ytm_try_start_pip(void) {
     if (!YTPiPEnabled()) return;
     id ctl = g_pipController;
-    if (!ctl) {
-        YTModLog(@"autopip: chưa biết player PiP");
-        return;
-    }
+    if (!ctl) return;
     @try {
         SEL activeSel = sel_registerName("isPictureInPictureActive");
-        SEL canSel = sel_registerName("canEnablePictureInPicture");
         BOOL active = [ctl respondsToSelector:activeSel] &&
                       ((BOOL (*)(id, SEL))objc_msgSend)(ctl, activeSel);
-        BOOL can = [ctl respondsToSelector:canSel] &&
-                   ((BOOL (*)(id, SEL))objc_msgSend)(ctl, canSel);
-        if (active) {
-            YTModLog(@"autopip: PiP đã bật sẵn");
-            return;
-        }
-        // Vẫn gọi kể cả khi `can` = NO: hàm toggle tự kiểm tra lại lúc chạy,
-        // còn giá trị đọc sớm có thể chưa kịp cập nhật.
+        if (active) return;
+        // Không chặn theo canEnablePictureInPicture: hàm toggle tự kiểm tra lại
+        // lúc chạy, còn giá trị đọc sớm có thể chưa kịp cập nhật.
         SEL toggleSel = sel_registerName("maybeTogglePictureInPicture");
         if (![ctl respondsToSelector:toggleSel]) {
             YTModLog(@"autopip: thiếu maybeTogglePictureInPicture");
             return;
         }
         ((void (*)(id, SEL))objc_msgSend)(ctl, toggleSel);
-        YTModLog(@"autopip: đã gọi bật PiP (can=%d)", can);
     } @catch (__unused NSException *e) {
         YTModLog(@"autopip: lỗi khi bật PiP");
     }
@@ -91,7 +80,5 @@ void YTAutoPiPInstall(void) {
                     usingBlock:^(__unused NSNotification *note) {
                         ytm_try_start_pip();
                     }];
-        g_autoPiPInstalled = YES;
-        YTModLog(@"autopip: cài xong");
     });
 }

@@ -153,7 +153,6 @@ static void ytm_try_attach(void) {
         if (!w || w.bounds.size.width <= 0) continue;
         g_hostWindow = w;
         [[YTMenuController shared] positionInWindow:w];
-        YTModLog(@"menu gắn vào window %.0fx%.0f", w.bounds.size.width, w.bounds.size.height);
         return;
     }
 }

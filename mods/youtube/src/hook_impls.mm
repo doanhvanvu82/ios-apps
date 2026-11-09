@@ -49,7 +49,6 @@ static BOOL ytm_hasVideoAdTrackingRenderer(id self, SEL _cmd) {
 static IMP _orig_makeAdBreakRequest;
 static void ytm_makeAdBreakRequest(id self, SEL _cmd, id req, id response, id error) {
     if (YTAdsOffEnabled()) {
-        YTModLog(@"chặn ad break request (ads_off)");
         if (error) ((void (^)(id))error)(nil);
         return;
     }
@@ -60,7 +59,6 @@ static void ytm_makeAdBreakRequest(id self, SEL _cmd, id req, id response, id er
 static IMP _orig_makeAdBreakRequestRetry;
 static void ytm_makeAdBreakRequestRetry(id self, SEL _cmd, id req, id response, id error, BOOL retry) {
     if (YTAdsOffEnabled()) {
-        YTModLog(@"chặn ad break request retry (ads_off)");
         if (error) ((void (^)(id))error)(nil);
         return;
     }
@@ -70,10 +68,7 @@ static void ytm_makeAdBreakRequestRetry(id self, SEL _cmd, id req, id response, 
 // Pipeline slot quảng cáo: bỏ qua toàn bộ bước dựng layout.
 static IMP _orig_buildAndRegister;
 static void ytm_buildAndRegister(id self, SEL _cmd, id resp, id brk, id cpn, id pr, id intro, id slot, id layout) {
-    if (YTAdsOffEnabled()) {
-        YTModLog(@"chặn buildAndRegisterSlots (ads_off)");
-        return;
-    }
+    if (YTAdsOffEnabled()) return;
     ((void (*)(id, SEL, id, id, id, id, id, id, id))_orig_buildAndRegister)(self, _cmd, resp, brk, cpn, pr, intro, slot, layout);
 }
 

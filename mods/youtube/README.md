@@ -12,7 +12,7 @@ Tiêm dylib ObjC++ vào IPA YouTube **đã giải mã** (bản dump từ thiết
   `didReceiveAdBreakResponse:`) và cell feed (`didLoadRenderer:`,
   `didBindSlotData:layoutData:`) bỏ thân hàm; getter danh sách trả `[]`;
   `adPlayerResponse` trả nil. Các class ad tải lười nên thử cài lại mỗi 2 giây
-  (20 giây đầu) và mỗi lần về foreground (log `ads: OK`, `ads: CHẶN`).
+  (20 giây đầu) và mỗi lần về foreground (thiếu hook sau 20 giây → log `ads: chỉ cài N/M hook`).
   **Bẫy**: không trả nil từ hàm `init`/`create`/`slotFrom…` trả object
   (`YTAdSlot initWithSlotID…`, `YTSlotFactoryImpl.slotFromAdSlotMetadata…`) —
   caller dùng ngay → `EXC_BAD_ACCESS` tại `objc_retain`.
@@ -20,8 +20,8 @@ Tiêm dylib ObjC++ vào IPA YouTube **đã giải mã** (bản dump từ thiết
   của `YTInnerTubeCollectionViewController` trước khi dựng cell
   (`displaySectionsWithReloadingSectionControllerByRenderer:` lọc `_sectionRenderers`,
   `addSectionsFromArray:` lọc lượt cuộn thêm). Nhận diện bằng
-  `compatibilityOptions.hasAdLoggingData` hoặc layout chỉ dành cho quảng cáo — log
-  `feed: bỏ N mục`. **Bẫy (3.x)**: ẩn/nén cell quảng cáo sau khi dựng để lại khoảng
+  `compatibilityOptions.hasAdLoggingData` hoặc layout chỉ dành cho quảng cáo (không khớp → log
+  `feed MISS`). **Bẫy (3.x)**: ẩn/nén cell quảng cáo sau khi dựng để lại khoảng
   trống; hook tầng ELM/promo làm trống trang cá nhân.
 - **Sửa mất login khi cài qua Ksign** (`sideloadfix.mm`): chứng chỉ Ksign không có
   keychain group `EQHXZ8M8AV.*` và app group `group.com.google.*` của Google → bỏ
@@ -154,11 +154,13 @@ Mod ghi `Documents/Logs/<ngày>.log` (bật `UIFileSharingEnabled` nên lấy đ
 qua app Files), hoặc cắm USB:
 
 ```bash
-toolkit/pull_app_logs.sh vn.vudv.youtube.mod
+toolkit/pull_app_logs.sh com.google.ios.youtube
 ```
 
-Log có dòng `hook OK`/`hook MISS` cho từng mục và cảnh báo nếu type encoding
-runtime lệch với dump — gửi log lại để chỉnh hook.
+Bình thường log chỉ có dòng `dylib nạp (mod …)` và tổng số hook. Chỉ ghi khi có
+lỗi: `hook MISS`, `feed MISS`, `autopip MISS`, `ads: chỉ cài N/M hook`,
+`sideloadfix: keychain MISS`/`mprotect … lỗi`, cảnh báo type encoding lệch dump.
+Muốn chẩn đoán sâu hơn thì thêm log tạm, xong việc thì gỡ.
 
 ## Đã kiểm chứng / chưa kiểm chứng
 
@@ -166,9 +168,9 @@ runtime lệch với dump — gửi log lại để chỉnh hook.
   `CoreFoundation`), IPA 130 MB có `LC_LOAD_DYLIB` đúng 1 lần, `__TEXT.__text`
   và `__LINKEDIT` không đổi so với IPA gốc (chỉ chèn 72 byte vào padding),
   `cryptid 0`, 5 appex được ký lại, dylib 294 symbol.
-- **Chưa chạy trên iPhone**: hành vi thực tế (có hết quảng cáo, tiếng chạy khi
-  khoá máy) phải thử trên máy. Nếu quảng cáo còn, xem log `hook MISS` và bổ
-  sung selector vào `hook_impls.mm`.
+- Đã chạy trên iPhone (3.33): hết quảng cáo feed không để khoảng trống, trang cá
+  nhân hiển thị đúng, giữ login sau khi đóng app. Nếu quảng cáo quay lại (YouTube
+  đổi bản), xem log `MISS`.
 
 ## CI (GitHub Actions)
 
