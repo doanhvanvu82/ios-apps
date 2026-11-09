@@ -30,6 +30,29 @@ static id h_readIdentity(id s, SEL c) {
     return v;
 }
 
+// setCurrentIdentity: v24@0:8@16 — YouTube gán identity sau login; log userID
+// để biết identity có thật được gắn vào store không (GHI nil = currentIdentity
+// nil lúc store → identity chưa được gán).
+static IMP _o_setCurrentIdentity;
+static void h_setCurrentIdentity(id s, SEL c, id identity) {
+    @try {
+        NSString *uid = nil;
+        if ([identity respondsToSelector:@selector(userID)]) {
+            uid = ((NSString *(*)(id, SEL))objc_msgSend)(identity, @selector(userID));
+        }
+        BOOL valid = NO;
+        if ([identity respondsToSelector:@selector(hasValidAuth)]) {
+            valid = ((BOOL (*)(id, SEL))objc_msgSend)(identity, @selector(hasValidAuth));
+        }
+        static int n = 0;
+        if (n < 30) {
+            n++;
+            YTModLog(@"identity: setCurrentIdentity ← %@ (hasValidAuth=%d)", uid ?: @"(nil)", valid);
+        }
+    } @catch (__unused NSException *e) {}
+    ((void (*)(id, SEL, id))_o_setCurrentIdentity)(s, c, identity);
+}
+
 static IMP _o_storeIdentity;
 static void h_storeIdentity(id s, SEL c) {
     @try {
@@ -66,6 +89,12 @@ void YTKeychainDiagInstall(void) {
             _o_storeIdentity = method_getImplementation(m2);
             class_replaceMethod(cls, sel_registerName("storeCurrentIdentityToDisk"),
                                 (IMP)h_storeIdentity, method_getTypeEncoding(m2));
+        }
+        Method m3 = class_getInstanceMethod(cls, sel_registerName("setCurrentIdentity:"));
+        if (m3) {
+            _o_setCurrentIdentity = method_getImplementation(m3);
+            class_replaceMethod(cls, sel_registerName("setCurrentIdentity:"),
+                                (IMP)h_setCurrentIdentity, method_getTypeEncoding(m3));
         }
         YTModLog(@"identity-diag: cài xong (log đọc/ghi identity mỗi lần)");
     });
