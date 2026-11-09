@@ -18,6 +18,7 @@ import glob
 import json
 import os
 import plistlib
+import re
 import shutil
 import socket
 import sys
@@ -88,6 +89,13 @@ def app_entry(ipa, base, now):
     # Mod giữ nguyên version app (vd YouTube 21.44.4) và chỉ tăng build — thêm
     # build vào tên file để Ksign không dùng cache bản cũ.
     suffix = version if str(build) == str(version) else f"{version}-{build}"
+    # Mod YouTube giữ cả version lẫn build gốc → lấy version mod từ tên IPA
+    # (mods/youtube/out/YouTube_orig_21.44.4_mod3.33.ipa).
+    mod = re.search(r"_mod([0-9.]+)\.ipa$", ipa)
+    note = f"Build {build}"
+    if mod:
+        suffix += f"-mod{mod.group(1)}"
+        note += f" · mod {mod.group(1)}"
     ipa_name = f"{file_stem}-{suffix}.ipa"
     shutil.copyfile(ipa, os.path.join(OUT, ipa_name))
     if icon:
@@ -107,7 +115,7 @@ def app_entry(ipa, base, now):
         # Định dạng cũ (AltStore 1.x / SideStore cũ)
         "version": version,
         "versionDate": now.strftime("%Y-%m-%d"),
-        "versionDescription": f"Build {build}",
+        "versionDescription": note,
         "downloadURL": download,
         "size": size,
         # Định dạng mới (AltStore 2.x / SideStore mới)
@@ -115,7 +123,7 @@ def app_entry(ipa, base, now):
             "version": version,
             "buildVersion": build,
             "date": now.isoformat(timespec="seconds"),
-            "localizedDescription": f"Build {build}",
+            "localizedDescription": note,
             "downloadURL": download,
             "size": size,
         }],
