@@ -7,6 +7,8 @@
 #   ./build.sh --check             # chỉ kiểm tra có IPA gốc không (exit 3 nếu thiếu)
 #   SUFFIX= ./build.sh             # giữ bundle id gốc com.google.ios.youtube (MẶC ĐỊNH)
 #   SUFFIX=mod ./build.sh          # đổi thành vn.vudv.youtube.mod, cài song song YouTube gốc
+#   VARIANT=nohook ./build.sh      # chia đôi lỗi: dylib nạp nhưng không cài hook
+#   VARIANT=nodylib ./build.sh     # chia đôi lỗi: không tiêm dylib, chỉ đóng gói/ký lại như bản mod
 #
 # Kết quả: out/YouTube_<tag>_<version>.ipa (+ .deb nếu có ldid/dpkg-deb)
 #
@@ -27,7 +29,9 @@ WORK="$HERE/work"
 OUT="$HERE/out"
 APP_NAME="YouTube"
 DYLIB_NAME="libyoutubemod.dylib"
-MOD_VERSION="${MOD_VERSION:-3.28}"
+MOD_VERSION="${MOD_VERSION:-3.29}"
+VARIANT="${VARIANT:-full}"
+case "$VARIANT" in full|nohook|nodylib) ;; *) echo "❌ VARIANT lạ: $VARIANT (full|nohook|nodylib)" >&2; exit 1 ;; esac
 # Nhãn build hiển thị trong menu (biết đang dùng bản mới hay cũ).
 BUILD_LABEL="${BUILD_LABEL:-$(date +%y%m%d-%H%M)}"
 # Mặc định giữ bundle id gốc: đổi id thì Google chặn đăng nhập và không trả
@@ -156,13 +160,15 @@ build_dylib() {
   local objdir="$WORK/obj/dylib"
   rm -rf "$objdir"; mkdir -p "$objdir"
   local objs=()
+  local defs=()
+  [ "$VARIANT" = nohook ] && defs+=(-DYT_NO_HOOKS)
   for s in "$HERE/src/"*.mm; do
     local base; base="$(basename "$s" .mm)"
     local o="$objdir/$base.o"
     "$CLANG" -target arm64-apple-ios17.0 -isysroot "$SDK" \
       -fobjc-arc -O2 -fvisibility=hidden -Wno-deprecated-declarations \
       -DYT_VERSION_TAG="\"$MOD_VERSION\"" \
-      -DYT_BUILD_LABEL="\"$BUILD_LABEL\"" \
+      -DYT_BUILD_LABEL="\"$BUILD_LABEL\"" ${defs[@]+"${defs[@]}"} \
       -I "$HERE/src" \
       -c "$s" -o "$o"
     objs+=("$o")
@@ -198,12 +204,14 @@ build_dylib() {
 patch_app() {
   local app="$1" dylib="$2" bid="$3" disp="$4"
   local bin="$app/$APP_NAME"
-  mkdir -p "$app/Frameworks"
-  cp "$dylib" "$app/Frameworks/$DYLIB_NAME"
+  if [ "$VARIANT" != nodylib ]; then
+    mkdir -p "$app/Frameworks"
+    cp "$dylib" "$app/Frameworks/$DYLIB_NAME"
 
-  echo "→ thêm LC_LOAD_DYLIB vào binary chính…"
-  # Ghi vào padding header (không dựng lại LINKEDIT như LIEF) — xem tools/inject_dylib.py.
-  python3 "$HERE/tools/inject_dylib.py" "$bin" "@executable_path/Frameworks/$DYLIB_NAME"
+    echo "→ thêm LC_LOAD_DYLIB vào binary chính…"
+    # Ghi vào padding header (không dựng lại LINKEDIT như LIEF) — xem tools/inject_dylib.py.
+    python3 "$HERE/tools/inject_dylib.py" "$bin" "@executable_path/Frameworks/$DYLIB_NAME"
+  fi
 
   # KHÔNG đổi CFBundleVersion/CFBundleShortVersionString: YouTube gửi chúng
   # làm clientVersion tới InnerTube, mà server chỉ chấp nhận version thật của
@@ -255,7 +263,7 @@ PY
   else
     "$LDID" -S "$bin"
   fi
-  "$LDID" -S "$app/Frameworks/$DYLIB_NAME"
+  [ -f "$app/Frameworks/$DYLIB_NAME" ] && "$LDID" -S "$app/Frameworks/$DYLIB_NAME"
   # Framework/extension đi kèm phải được ký lại vì binary chính đổi.
   find "$app/Frameworks" "$app/PlugIns" -type f 2>/dev/null | while IFS= read -r f; do
     [ "$(head -c 4 "$f" 2>/dev/null | od -An -tx1 | tr -d ' \n')" = "cffaedfe" ] || continue
@@ -285,7 +293,7 @@ make_ipa() {
 
   local app="$stage/Payload/$APP_NAME.app"
   echo "  • LC_LOAD_DYLIB:"
-  "$OBJDUMP" --macho --dylibs-used "$app/$APP_NAME" | grep -c "$DYLIB_NAME" | sed 's/^/    count = /'
+  "$OBJDUMP" --macho --dylibs-used "$app/$APP_NAME" | { grep -c "$DYLIB_NAME" || true; } | sed 's/^/    count = /'
   echo "  • cf-bundle-id: $("$PY" - "$app/Info.plist" <<'PY'
 import plistlib,sys
 d=plistlib.load(open(sys.argv[1],'rb'))
@@ -296,7 +304,7 @@ PY
   ("$OBJDUMP" --macho --private-headers "$app/$APP_NAME" 2>/dev/null | grep -A5 'LC_ENCRYPTION_INFO' | grep cryptid || echo "    (không đọc được)") | sed 's/^/    /'
   echo "  • extension ký lại: $(find "$app/PlugIns" -name '*.appex' 2>/dev/null | wc -l) appex"
   echo "  • số file trong IPA: $(unzip -l "$outp" | tail -1 | awk '{print $2}')"
-  echo "  • kích thước dylib: $(du -h "$app/Frameworks/$DYLIB_NAME" | cut -f1)"
+  echo "  • kích thước dylib: $(du -h "$app/Frameworks/$DYLIB_NAME" 2>/dev/null | cut -f1 || echo "(không có)")"
   rm -rf "$stage"
 }
 
@@ -310,6 +318,7 @@ else
   BUNDLE_ID="vn.vudv.youtube.$SUFFIX"
   TAG="$SUFFIX"
 fi
+[ "$VARIANT" = full ] || TAG="$TAG-$VARIANT"
 
 DYLIB="$WORK/build/$DYLIB_NAME"
 mkdir -p "$WORK/build"
