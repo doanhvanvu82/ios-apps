@@ -16,13 +16,17 @@ Tiêm dylib ObjC++ vào IPA YouTube **đã giải mã** (bản dump từ thiết
   **Bẫy**: không trả nil từ hàm `init`/`create`/`slotFrom…` trả object
   (`YTAdSlot initWithSlotID…`, `YTSlotFactoryImpl.slotFromAdSlotMetadata…`) —
   caller dùng ngay → `EXC_BAD_ACCESS` tại `objc_retain`.
-- **Chặn quảng cáo feed + promo Premium** (`promo.mm`): cell quảng cáo/promo
-  trong feed trả kích thước `CGSizeZero` (`cellSizeWithSize:`…) nên không
-  chiếm chỗ; chặn trigger upsell/mealbar/interstitial (`triggerMatched`,
-  `triggerPromoFromCommandWrapperRenderer:`, `showUpsell:…`,
-  `startWithFirstResponder:`, `showSurvey…`) và các cổng promo trả `NO`
-  (`canShowThrottledPromo*`, `shouldShowPromotedItems`) — log `promo: OK`,
-  `promo: CHẶN`.
+- **Chặn quảng cáo feed** (`feedfilter.mm`): bỏ section quảng cáo khỏi model
+  của `YTInnerTubeCollectionViewController` trước khi dựng cell
+  (`displaySectionsWithReloadingSectionControllerByRenderer:` lọc `_sectionRenderers`,
+  `addSectionsFromArray:` lọc lượt cuộn thêm). Nhận diện bằng
+  `compatibilityOptions.hasAdLoggingData` hoặc layout chỉ dành cho quảng cáo — log
+  `feed: bỏ N mục`. **Bẫy (3.x)**: ẩn/nén cell quảng cáo sau khi dựng để lại khoảng
+  trống; hook tầng ELM/promo làm trống trang cá nhân.
+- **Sửa mất login khi cài qua Ksign** (`sideloadfix.mm`): chứng chỉ Ksign không có
+  keychain group `EQHXZ8M8AV.*` và app group `group.com.google.*` của Google → bỏ
+  `kSecAttrAccessGroup` khỏi `SecItem*` (ghi đè `__got`), app group thiếu → thư mục
+  trong container.
 - **Menu YT**: hiện `YT <phiên bản app> · mod <MOD_VERSION>` và `build <nhãn giờ>`
   để biết đang chạy bản mới hay cũ (version app luôn là `21.44.4`).
 - **Phát nền** (toggle riêng): ép `isBackgroundableByUserSettings` /
@@ -51,8 +55,8 @@ mods/youtube/
 │   ├── config.mm         NSUserDefaults + log Documents/Logs/<ngày>.log
 │   ├── hooks.h           bảng hook + API cài đặt
 │   ├── adblock.mm        chặn ads player/InnerTube
-│   ├── promo.mm          chặn ads feed + promo/upsell Premium
-│   ├── sectionfilter.mm  lọc entry quảng cáo + nén cell ad qua sizeForCellController
+│   ├── feedfilter.mm     bỏ section quảng cáo khỏi feed trước khi dựng cell
+│   ├── sideloadfix.mm    keychain/app group cho bản ký lại (giữ login)
 │   ├── autopip.mm        tự bật PiP khi rời foreground
 │   ├── hook_impls.mm     thân hook + YTM_HOOKS (class/selector/type encoding)
 │   ├── hooks.mm          swizzling bằng ObjC runtime, đọc cấu hình

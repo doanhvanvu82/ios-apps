@@ -5,16 +5,8 @@
 
 static void ytm_did_finish_launch(void) {
     YTModLog(@"app đã launch — cài hook (bỏ nhóm: %@)", YTModSkipGroups());
-    // Probe cài trước để ghi được element/cell của feed ngay từ lượt tải đầu.
-    if (YTModGroupOn(@"probe")) YTProbeInstall();
     if (YTModGroupOn(@"core")) YTHooksInstall();
-    if (YTModGroupOn(@"diag")) {
-        YTDiagInstall();
-        YTKeychainDiagInstall();
-    }
     if (YTModGroupOn(@"ads")) YTAdBlockInstall();
-    if (YTModGroupOn(@"promo")) YTPromoBlockInstall();
-    if (YTModGroupOn(@"section")) YTSectionFilterInstall();
     if (YTModGroupOn(@"pip")) YTAutoPiPInstall();
     if (YTModGroupOn(@"menu") && YTModBool(YTKeyMenu, YES)) {
         YTMenuInstall();
@@ -31,9 +23,8 @@ __attribute__((constructor)) static void ytm_init(void) {
     YTModLog(@"VARIANT nohook: bỏ qua mọi hook");
     return;
 #endif
-    // UISweep cài SỚM NHẤT: hook YTActiveViewDisplayContainerNode phải có trước
-    // khi feed render cell ad đầu (log 3.16: hook cài lúc launchMissed element #1).
-    if (YTModGroupOn(@"uisweep")) YTUISweepInstall();
+    // Lọc feed cài trước khi trang chủ tải lượt đầu (launch + 1s là quá muộn).
+    if (YTModGroupOn(@"feed")) YTFeedFilterInstall();
     // Về foreground (scene mới) thì thử cài lại hook ad — module lazy có thể
     // chưa có lúc launch. YTAdBlockInstall chỉ chạy 1 lần nên gọi ở đây an toàn.
     [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification
@@ -41,9 +32,6 @@ __attribute__((constructor)) static void ytm_init(void) {
                                                        queue:[NSOperationQueue mainQueue]
                                                   usingBlock:^(__unused NSNotification *note) {
         if (YTModGroupOn(@"ads")) YTAdBlockInstall();
-        if (YTModGroupOn(@"promo")) YTPromoBlockInstall();
-        if (YTModGroupOn(@"section")) YTSectionFilterInstall();
-        if (YTModGroupOn(@"probe")) YTProbeInstall();
     }];
     // Dylib nạp trước UIApplicationMain: chờ notification launch. Nếu app đã
     // launch từ trước (không xảy ra với LC_LOAD_DYLIB nhưng để chắc), dùng timer.

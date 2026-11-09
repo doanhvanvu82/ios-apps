@@ -50,35 +50,14 @@ extern const int YTM_HOOK_COUNT;
 // Menu nổi (gọi trên main thread, sau khi có window).
 void YTMenuInstall(void);
 
-// Ghi request/response mạng ra log (chẩn đoán lỗi tải dữ liệu).
-void YTDiagInstall(void);
-
 // Chặn quảng cáo ở tầng ad-slot (thử cài lại khi module lazy xuất hiện).
 void YTAdBlockInstall(void);
-
-// Chặn cell quảng cáo feed + promo/upsell Premium.
-void YTPromoBlockInstall(void);
-
-// Lọc entry quảng cáo/promo khỏi section renderers.
-void YTSectionFilterInstall(void);
-
-// Chẩn đoán element/cell quảng cáo của feed (mod 1.6).
-void YTProbeInstall(void);
 
 // Tự bật PiP khi app rời foreground (chỉ khi bật công tắc PiP).
 void YTAutoPiPInstall(void);
 
-// Quét UI ẩn cell quảng cáo theo nhãn "Được tài trợ" (cổng UI cuối cùng).
-void YTUISweepInstall(void);
-
-// Chẩn đoán mất login: log cookie SSO mỗi lần app vào foreground.
-void YTKeychainDiagInstall(void);
-
-// Quét UI ẩn cell quảng cáo theo nhãn "Được tài trợ" (cổng UI cuối cùng).
-void YTUISweepInstall(void);
-
-// Chẩn đoán mất login: log cookie SSO mỗi lần app vào foreground.
-void YTKeychainDiagInstall(void);
+// Lọc section quảng cáo khỏi feed trước khi dựng cell (không để khoảng trống).
+void YTFeedFilterInstall(void);
 
 // Sửa mất login khi ký lại bằng team khác (keychain group + app group).
 void YTSideloadFixInstall(void);
