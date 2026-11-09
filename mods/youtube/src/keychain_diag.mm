@@ -57,6 +57,36 @@ static id h_identityWithAuth(id s, SEL c, id auth) {
     return ((id (*)(id, SEL, id))_o_identityWithAuth)(s, c, auth);
 }
 
+// SSOService.forget* — nếu YouTube TỰ XOÁ identity (invalidGrant → thu hồi token),
+// đây là nguồn gốc mất login. Log mọi lần forget.
+static IMP _o_forgetIdentity;
+static void h_forgetIdentity(id s, SEL c, id id1, id callback) {
+    @try {
+        NSString *uid = nil;
+        if ([id1 respondsToSelector:@selector(userID)]) {
+            uid = ((NSString *(*)(id, SEL))objc_msgSend)(id1, @selector(userID));
+        }
+        YTModLog(@"login: forgetIdentity ← %@ (app tự xoá identity!)", uid ?: @"(nil)");
+    } @catch (__unused NSException *e) {}
+    if (callback) {
+        // gọi callback(nil) để flow không treo — forget chấp nhận callback nullable
+    }
+    ((void (*)(id, SEL, id, id))_o_forgetIdentity)(s, c, id1, callback);
+}
+
+static IMP _o_forgetIdentityInvalidGrant;
+static void h_forgetIdentityInvalidGrant(id s, SEL c, id id1, id callback) {
+    @try {
+        NSString *uid = nil;
+        if ([id1 respondsToSelector:@selector(userID)]) {
+            uid = ((NSString *(*)(id, SEL))objc_msgSend)(id1, @selector(userID));
+        }
+        YTModLog(@"login: forgetIdentityWithInvalidGrant ← %@ (TOKEN BỊ SERVER THU HỒI)",
+                 uid ?: @"(nil)");
+    } @catch (__unused NSException *e) {}
+    ((void (*)(id, SEL, id, id))_o_forgetIdentityInvalidGrant)(s, c, id1, callback);
+}
+
 // setCurrentIdentity: v24@0:8@16 — YouTube gán identity sau login; log userID
 // để biết identity có thật được gắn vào store không (GHI nil = currentIdentity
 // nil lúc store → identity chưa được gán).
@@ -118,6 +148,26 @@ void YTKeychainDiagInstall(void) {
                                 (IMP)h_storeIdentity, method_getTypeEncoding(m2));
         }
         Class ssoCls = objc_getClass("SSOService");
+        // forget* — log mọi lần app tự xoá identity (điểm bắt đầu mất login).
+        static IMP _o_forgetUserInitiated, _o_forgetRevoke, _o_forgetUserRevoke;
+        struct { const char *sel; IMP *orig; IMP hook; const char *label; } forgets[] = {
+            {"forgetIdentity:callback:", &_o_forgetIdentity, (IMP)h_forgetIdentity, "forgetIdentity"},
+            {"forgetIdentityWithInvalidGrant:callback:", &_o_forgetIdentityInvalidGrant, (IMP)h_forgetIdentityInvalidGrant, "forInvalidGrant"},
+            {"forgetIdentity:userInitiated:callback:", &_o_forgetUserInitiated, (IMP)h_forgetIdentity, "forgetUserInitiated"},
+            {"forgetIdentity:revokeToken:callback:", &_o_forgetRevoke, (IMP)h_forgetIdentity, "forgetRevokeToken"},
+            {"forgetIdentity:userInitiated:revokeToken:invalidGrant:callback:", &_o_forgetUserRevoke, (IMP)h_forgetIdentityInvalidGrant, "forgetUserRevoke"},
+        };
+        for (size_t fi = 0; fi < sizeof(forgets)/sizeof(forgets[0]); fi++) {
+            Method fm = ssoCls ? class_getInstanceMethod(ssoCls, sel_registerName(forgets[fi].sel)) : NULL;
+            if (fm) {
+                *forgets[fi].orig = method_getImplementation(fm);
+                class_replaceMethod(ssoCls, sel_registerName(forgets[fi].sel),
+                                    forgets[fi].hook, method_getTypeEncoding(fm));
+                YTModLog(@"identity-diag: hook %s OK", forgets[fi].label);
+            } else {
+                YTModLog(@"identity-diag: MISS %s", forgets[fi].sel);
+            }
+        }
         Method m4 = ssoCls ? class_getInstanceMethod(ssoCls, sel_registerName("identityWithAuth:")) : NULL;
         if (m4) {
             _o_identityWithAuth = method_getImplementation(m4);
