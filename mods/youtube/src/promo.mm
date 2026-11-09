@@ -249,7 +249,7 @@ static BOOL g_promoDone[YTM_PROMO_COUNT];
 
 static int ytm_promo_install_pass(BOOL verbose) {
     int done = 0;
-    for (int i = 0; i < YTM_PROMO_COUNT; i++) {
+    for (int i = 0; i < YTM_PROMO_COUNT && YTModGroupOn(@"promo-trigger"); i++) {
         if (g_promoDone[i]) { done++; continue; }
         const YTMPromoHook *h = &YTM_PROMO_HOOKS[i];
         Class cls = objc_getClass(h->cls);
@@ -265,7 +265,7 @@ static int ytm_promo_install_pass(BOOL verbose) {
         done++;
         if (verbose) YTModLog(@"promo OK  %s", h->label);
     }
-    ytm_hook_cells();
+    if (YTModGroupOn(@"promo-cell")) ytm_hook_cells();
     return done;
 }
 

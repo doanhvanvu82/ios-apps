@@ -9,7 +9,7 @@
 #   SUFFIX=mod ./build.sh          # đổi thành vn.vudv.youtube.mod, cài song song YouTube gốc
 #   VARIANT=nohook ./build.sh      # chia đôi lỗi: dylib nạp nhưng không cài hook
 #   VARIANT=nodylib ./build.sh     # chia đôi lỗi: không tiêm dylib, chỉ đóng gói/ký lại như bản mod
-#   SKIP="ads section" ./build.sh  # chia đôi lỗi: bỏ cài nhóm hook (core ads promo section probe uisweep diag pip menu)
+#   SKIP="ads section" ./build.sh  # chia đôi lỗi: bỏ cài nhóm hook (core ads promo[-cell|-trigger] section[-list|-elm] probe uisweep diag pip menu)
 #
 # Kết quả: out/YouTube_<tag>_<version>.ipa (+ .deb nếu có ldid/dpkg-deb)
 #
@@ -30,7 +30,7 @@ WORK="$HERE/work"
 OUT="$HERE/out"
 APP_NAME="YouTube"
 DYLIB_NAME="libyoutubemod.dylib"
-MOD_VERSION="${MOD_VERSION:-3.31}"
+MOD_VERSION="${MOD_VERSION:-3.32}"
 VARIANT="${VARIANT:-full}"
 case "$VARIANT" in full|nohook|nodylib) ;; *) echo "❌ VARIANT lạ: $VARIANT (full|nohook|nodylib)" >&2; exit 1 ;; esac
 # Nhãn build hiển thị trong menu (biết đang dùng bản mới hay cũ).

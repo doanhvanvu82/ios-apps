@@ -22,6 +22,19 @@ void YTModFlush(void) {
     [YTModDefaults() synchronize];
 }
 
+#ifndef YT_SKIP_GROUPS
+#define YT_SKIP_GROUPS ""
+#endif
+
+NSString *YTModSkipGroups(void) {
+    return @YT_SKIP_GROUPS;
+}
+
+BOOL YTModGroupOn(NSString *group) {
+    NSString *skip = [NSString stringWithFormat:@",%@,", YTModSkipGroups()];
+    return ![skip containsString:[NSString stringWithFormat:@",%@,", group]];
+}
+
 static dispatch_queue_t g_logQueue = NULL;
 static NSString *g_logPath = nil;
 

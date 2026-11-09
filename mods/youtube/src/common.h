@@ -22,6 +22,10 @@ void YTModSetBool(NSString *key, BOOL v);
 void YTModFlush(void);
 void YTModLog(NSString *fmt, ...) NS_FORMAT_FUNCTION(1, 2);
 
+// Biến thể chia đôi lỗi: build.sh SKIP="ads section-elm" → nhóm đó không cài.
+BOOL YTModGroupOn(NSString *group);
+NSString *YTModSkipGroups(void);
+
 // Mở file log (gọi sớm trong constructor).
 void YTModLogOpen(void);
 

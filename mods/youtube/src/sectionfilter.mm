@@ -421,8 +421,14 @@ void YTSectionFilterInstall(void) {
         {"YTBrowseContinuationSourceBlock", "createElementBytesArrayFromElementRenderers:", (IMP)h_bytesFromRenderers, &_o_bytesFromRenderers, "bytes"},
         {"ELMNodeFactory", "nodeWithElement:materializationContext:", (IMP)h_nodeWithElement, &_o_nodeWithElement, "node"},
     };
+    // Nhóm con để chia đôi lỗi UI: elm/tab/elmctl/bytes/node là tầng ELM,
+    // phần còn lại là tầng section/cell.
+    static const char *kElmLabels[] = {"elm", "tab", "elmctl", "bytes", "node"};
     for (int i = 0; i < 13; i++) {
         if (done[i]) { n++; continue; }
+        BOOL elm = NO;
+        for (int k = 0; k < 5; k++) elm = elm || strcmp(all[i].label, kElmLabels[k]) == 0;
+        if (!YTModGroupOn(elm ? @"section-elm" : @"section-list")) continue;
         if (ytm_install_one(all[i].cls, all[i].sel, all[i].hook, all[i].orig, all[i].label)) {
             done[i] = YES;
             n++;
