@@ -74,7 +74,7 @@ export IPA=/đường/dẫn/YouTube.ipa
 export IPA_URL=https://…/YouTube-21.44.4.ipa   # tải về work/ (CI)
 
 # 2) build
-./build.sh                 # → out/YouTube_orig_21.44.4.ipa (giữ bundle id gốc)
+./build.sh                 # → out/YouTube_orig_21.44.4_mod<ver>.ipa (giữ bundle id gốc)
 SUFFIX=mod ./build.sh      # → đổi id vn.vudv.youtube.mod, cài song song YouTube gốc
 ./build.sh --check         # exit 0 nếu có IPA nguồn, 3 nếu thiếu (build_all dùng)
 

@@ -76,7 +76,7 @@ Build: `apps/<App>/build.sh` (lần đầu hoặc sau khi di chuyển thư mục
 IPA gốc không nằm trong repo: đặt `IPA=/đường/dẫn/…` hoặc `IPA_URL=…` trong `mods/<Mod>/source.env` (không commit).
 
 ```bash
-mods/youtube/build.sh          # → mods/youtube/out/YouTube_mod_<ver>.ipa (+ .deb)
+mods/youtube/build.sh          # → mods/youtube/out/YouTube_orig_<ver>_mod<modver>.ipa (+ .deb)
 mods/youtube/build.sh --check  # exit 3 nếu thiếu IPA gốc (build_all.sh dùng để skip)
 ```
 

@@ -50,7 +50,7 @@ apps/AdsBlocker/build.sh
 apps/Mangalate/build.sh
 
 # Mod (cần IPA gốc, xem mods/youtube/README.md)
-mods/youtube/build.sh        # → mods/youtube/out/YouTube_mod_<ver>.ipa
+mods/youtube/build.sh        # → mods/youtube/out/YouTube_orig_<ver>_mod<modver>.ipa
 
 toolkit/build_all.sh         # build mọi app + mod (bỏ qua build-exclude.txt)
 ```

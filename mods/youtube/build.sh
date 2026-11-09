@@ -324,7 +324,7 @@ DYLIB="$WORK/build/$DYLIB_NAME"
 mkdir -p "$WORK/build"
 build_dylib "$DYLIB"
 
-make_ipa "$TAG" "$DYLIB" "$BUNDLE_ID" "YouTube Mod" "${APP_NAME}_${TAG}_${VERSION}.ipa"
+make_ipa "$TAG" "$DYLIB" "$BUNDLE_ID" "YouTube Mod" "${APP_NAME}_${TAG}_${VERSION}_mod${MOD_VERSION}.ipa"
 
 # .deb (cho máy jailbreak) — chỉ khi có ldid/dpkg-deb.
 if command -v dpkg-deb >/dev/null 2>&1; then
