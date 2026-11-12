@@ -67,19 +67,19 @@
       "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
       "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate.png",
       "tintColor": "#738CFF",
-      "version": "1.69",
+      "version": "1.72",
       "versionDate": "2026-11-12",
-      "versionDescription": "Build 69",
-      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate-1.69-69.ipa",
-      "size": 349494,
+      "versionDescription": "Build 72",
+      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate-1.72-72.ipa",
+      "size": 359249,
       "versions": [
         {
-          "version": "1.69",
-          "buildVersion": "69",
-          "date": "2026-11-12T16:01:03+00:00",
-          "localizedDescription": "Build 69",
-          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate-1.69-69.ipa",
-          "size": 349494
+          "version": "1.72",
+          "buildVersion": "72",
+          "date": "2026-11-12T16:10:21+00:00",
+          "localizedDescription": "Build 72",
+          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/Mangalate-1.72-72.ipa",
+          "size": 359249
         }
       ],
       "appPermissions": {
