@@ -55,11 +55,13 @@ struct OfflinePacksSection: View {
         .translationTask(configuration) { session in
             do {
                 try await session.prepareTranslation()
+                AppLog.log("offline", "tải xong \(queue.first?.language.maximalIdentifier ?? "?")")
                 error = nil
                 queue = Array(queue.dropFirst())
             } catch {
                 // Thường là người dùng huỷ hộp thoại tải — dừng cả hàng, không hỏi tiếp từng gói.
                 self.error = "Không tải được gói \(queue.first?.name ?? ""): \(error.localizedDescription)"
+                AppLog.log("offline", "tải lỗi \(queue.first?.language.maximalIdentifier ?? "?"): \(error)")
                 queue = []
             }
             await refresh()
@@ -77,8 +79,15 @@ struct OfflinePacksSection: View {
 
     private func refresh() async {
         let availability = LanguageAvailability(preferredStrategy: .highFidelity)
+        let standard = LanguageAvailability()
+        var line: [String] = []
         for source in sources {
-            statuses[source.key.rawValue] = await availability.status(from: source.language, to: OfflineLanguages.target)
+            let status = await availability.status(from: source.language, to: OfflineLanguages.target)
+            statuses[source.key.rawValue] = status
+            let standardStatus = await standard.status(from: source.language, to: OfflineLanguages.target)
+            line.append("\(source.language.maximalIdentifier)=\(status)/\(standardStatus)")
         }
+        // Chẩn đoán gói "đã tải" lại hiện nút Tải sau khi cập nhật app: highFidelity/chuẩn cho từng ngôn ngữ.
+        AppLog.log("offline", "trạng thái gói: " + line.joined(separator: " "))
     }
 }
