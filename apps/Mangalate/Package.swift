@@ -20,12 +20,19 @@ let package = Package(
         ),
     ],
     targets: [
+        // Danh sách ngôn ngữ dịch offline dùng chung cho app (tải gói) và extension (dịch).
+        .target(
+            name: "OfflineLanguages",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
         .target(
             name: "Mangalate",
+            dependencies: ["OfflineLanguages"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .target(
             name: "MangalateExtension",
+            dependencies: ["OfflineLanguages"],
             swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: [
                 .linkedFramework("Vision"),

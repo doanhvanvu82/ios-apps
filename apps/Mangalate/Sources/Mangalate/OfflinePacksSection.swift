@@ -1,3 +1,4 @@
+import OfflineLanguages
 import SwiftUI
 import Translation
 // xtool build bằng explicit module nên cross-import overlay (`.translationTask`) không tự nạp.
@@ -7,31 +8,29 @@ import _Translation_SwiftUI
 /// nên phải tải ở đây (hộp thoại hệ thống hiện khi gọi `prepareTranslation`).
 @available(iOS 26.4, *)
 struct OfflinePacksSection: View {
-    /// Trùng `OfflineTranslator.sources` của extension.
-    private static let sources: [(id: String, name: String)] = [
-        ("ja", "Nhật"), ("ko", "Hàn"), ("zh-Hans", "Trung giản thể"), ("zh-Hant", "Trung phồn thể"), ("en", "Anh"),
-    ]
-    private static let target = Locale.Language(identifier: "vi")
-
+    @State private var sources: [OfflineLanguages.Source] = []
     @State private var statuses: [String: LanguageAvailability.Status] = [:]
     @State private var configuration: TranslationSession.Configuration?
     @State private var error: String?
 
     var body: some View {
         Section("4. Dịch offline (không cần key)") {
-            Label("Trong popup chọn model **Offline – Apple Dịch**. Dịch trên máy, xưng hô/giới tính kém hơn Gemini.", systemImage: "wifi.slash")
-            ForEach(Self.sources, id: \.id) { source in
+            Label("Trong popup chọn model **Offline – Apple Dịch**. Dịch trên máy, xưng hô/giới tính kém hơn Gemini. Chỉ cần tải ngôn ngữ của truyện bạn đọc.", systemImage: "wifi.slash")
+            if sources.isEmpty {
+                ProgressView()
+            }
+            ForEach(sources, id: \.key.rawValue) { source in
                 HStack {
                     Text("\(source.name) → Việt")
                     Spacer()
-                    switch statuses[source.id] {
+                    switch statuses[source.key.rawValue] {
                     case .installed:
                         Label("Đã tải", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                     case .supported:
                         Button("Tải") {
                             configuration = TranslationSession.Configuration(
-                                source: Locale.Language(identifier: source.id),
-                                target: Self.target,
+                                source: source.language,
+                                target: OfflineLanguages.target,
                                 preferredStrategy: .highFidelity
                             )
                         }
@@ -46,7 +45,10 @@ struct OfflinePacksSection: View {
                 Text(error).foregroundStyle(.red).font(.footnote)
             }
         }
-        .task { await refresh() }
+        .task {
+            sources = await OfflineLanguages.sources()
+            await refresh()
+        }
         .translationTask(configuration) { session in
             do {
                 try await session.prepareTranslation()
@@ -61,8 +63,8 @@ struct OfflinePacksSection: View {
 
     private func refresh() async {
         let availability = LanguageAvailability(preferredStrategy: .highFidelity)
-        for source in Self.sources {
-            statuses[source.id] = await availability.status(from: Locale.Language(identifier: source.id), to: Self.target)
+        for source in sources {
+            statuses[source.key.rawValue] = await availability.status(from: source.language, to: OfflineLanguages.target)
         }
     }
 }
