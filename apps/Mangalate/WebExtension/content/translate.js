@@ -837,8 +837,9 @@
 
   /** Cắt khung theo đường bao bong bóng (đa giác native trả về), toạ độ % so với khung. */
   function applyClip(block, element) {
-    const poly = block.poly;
-    const box = block.box;
+    // Toạ độ % tính theo đúng khung mà placeBlock đặt cho nền (core.backdropFrame).
+    const poly = Array.isArray(block.backdropPoly) && block.backdropPoly.length >= 6 ? block.backdropPoly : block.poly;
+    const box = core.backdropFrame(block);
     if (!Array.isArray(poly) || poly.length < 6 || !box || box.w <= 0 || box.h <= 0) {
       element.style.clipPath = "";
       return;

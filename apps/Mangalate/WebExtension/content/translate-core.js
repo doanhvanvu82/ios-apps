@@ -225,7 +225,31 @@
       fitTextAreaToPolygon(block);
     });
     resolveTextAreaOverlaps(blocks);
+    for (const block of blocks) block.backdropPoly = backdropPolygon(block);
     return blocks;
+  }
+
+  // Nền chỉ cần che chữ gốc và vùng đặt bản dịch, cộng lề bằng chừng này lần cỡ một dòng. Phủ cả
+  // bong bóng theo đường bao thì chỗ đường bao loang (hai bong bóng chạm nhau, đuôi bong bóng, mép
+  // panel) thành khối có cạnh thẳng cắt ngang viền bong bóng và tranh.
+  const BACKDROP_PAD_LINES = 0.5;
+
+  /** Đường bao bong bóng cắt về vùng chữ (gốc + bản dịch) có lề; null thì nền vẽ theo `poly`/`box`. */
+  function backdropPolygon(block) {
+    const poly = block.poly;
+    const size = block.pixelSize;
+    if (!Array.isArray(poly) || poly.length < 8 || !size || !(block.lineSize > 0)) return null;
+    const text = block.textBox || block.box;
+    const area = block.textArea || text;
+    const padX = (BACKDROP_PAD_LINES * block.lineSize) / size.w;
+    const padY = (BACKDROP_PAD_LINES * block.lineSize) / size.h;
+    return clipPolygonToRect(
+      poly,
+      Math.min(text.x, area.x) - padX,
+      Math.min(text.y, area.y) - padY,
+      Math.max(text.x + text.w, area.x + area.w) + padX,
+      Math.max(text.y + text.h, area.y + area.h) + padY
+    );
   }
 
   /**
@@ -240,6 +264,7 @@
   function backdropFrame(block) {
     const box = block && block.box;
     if (!box) return null;
+    if (Array.isArray(block.backdropPoly) && block.backdropPoly.length >= 6) return polygonBounds(block.backdropPoly);
     const poly = block.poly;
     if (Array.isArray(poly) && poly.length >= 6) return box;
     // Cột chữ dọc: `textArea` đã nới ngang cho bản dịch tiếng Việt (có khi rộng gấp 5 lần cột
@@ -278,16 +303,17 @@
     let y0 = Math.max(0, text.y - padY);
     let x1 = Math.min(1, text.x + text.w + padX);
     let y1 = Math.min(1, text.y + text.h + padY);
-    // `box` là vùng chữ GỐC: nền phải che hết, nếu không chữ gốc còn lộ ra cạnh bản dịch. Trước
-    // đây nền lấy một trong hai (`box` cho cột dọc, `textArea` cho phần còn lại) nên luôn hụt
-    // một phía: cột dọc thì chữ dịch trôi ra ngoài nền, chữ nhật thì chữ gốc không bị che hết.
-    // Nhưng `box` do OCR loang có khi phủ cả panel — chỉ mở rộng khi nó không quá lớn.
-    const boxArea = box.w * box.h;
-    if (!captionFrame && boxArea > 0 && boxArea <= text.w * text.h * 3) {
-      x0 = Math.min(x0, box.x);
-      y0 = Math.min(y0, box.y);
-      x1 = Math.max(x1, box.x + box.w);
-      y1 = Math.max(y1, box.y + box.h);
+    // Chữ GỐC phải bị che hết, nếu không còn lộ ra cạnh bản dịch. Có `textBox` thì đó chính là chữ
+    // gốc; `box` là vùng bong bóng loang (có khi trùm cả bong bóng bên cạnh) — gộp vào thì nền thành
+    // khối chữ nhật cắt ngang viền bong bóng. Cache cũ không có `textBox`: dùng `box` khi nó không
+    // quá lớn.
+    const original = block.textBox || box;
+    const originalArea = original.w * original.h;
+    if (!captionFrame && originalArea > 0 && (block.textBox || originalArea <= text.w * text.h * 3)) {
+      x0 = Math.min(x0, original.x);
+      y0 = Math.min(y0, original.y);
+      x1 = Math.max(x1, original.x + original.w);
+      y1 = Math.max(y1, original.y + original.h);
     }
     if (x1 <= x0 || y1 <= y0) return box;
     return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
@@ -653,9 +679,9 @@
     const minFill = (options && options.minFill) ?? SPEECH_MIN_FILL;
     const minEnclose = (options && options.minEnclose) ?? SPEECH_MIN_ENCLOSE;
     const minRatio = (options && options.minRatio) ?? SPEECH_MIN_RATIO;
-    const speech = all.filter((block) => {
-      const text = String(block.text || "");
-      if (NON_DIALOGUE.test(text) || DOMAIN_WORD.test(text)) return false;
+    const hard = nonDialogue(all);
+    const allowed = all.filter((block) => !hard.has(block));
+    const speech = allowed.filter((block) => {
       const closedBubble = block.traced === true || (Array.isArray(block.poly) && block.poly.length >= 6);
       if (typeof block.fill === "number" && block.fill < (closedBubble ? Math.min(minFill, SPEECH_MIN_FILL_BUBBLE) : minFill)) {
         return false;
@@ -664,8 +690,78 @@
       if (!isBubbleBackground(block.bg)) return false;
       return true;
     });
-    if (!speech.length || speech.length < Math.ceil(all.length * minRatio)) return all.slice();
+    // Lọc theo nền quá tay thì giữ cả phần nền không đạt, nhưng chữ chắc chắn không phải thoại thì vẫn bỏ.
+    if (!speech.length || speech.length < Math.ceil(all.length * minRatio)) return allowed;
     return speech;
+  }
+
+  // Watermark của trang scan lặp lại ở nhiều ảnh trong chapter, mỗi lần OCR ra hơi khác nhau. Dòng
+  // dài (≥ REPEAT_MIN_CHARS chữ/số) giống ít nhất REPEAT_MIN_OTHERS dòng khác là watermark; thoại thật
+  // dài cỡ đó hầu như không lặp lại nguyên văn.
+  const REPEAT_MIN_CHARS = 15;
+  const REPEAT_MIN_OTHERS = 2;
+  const REPEAT_MIN_SHARE = 0.5;
+  // SFX vẽ to hơn hẳn chữ thoại: đo trên tools/e2e, thoại hét to trong manga tới ~3 lần cỡ dòng trung
+  // vị của chapter, SFX bị OCR đọc ra ("TTTA", "SRYA-") từ 5 lần.
+  const SFX_MIN_SCALE = 4;
+  const CHAPTER_TITLE = /(chapter|chương|tập|episode|ngoại truyện|side story|第.{1,4}[話话章])/i;
+  const LETTERS = /[\p{L}\p{N}]/gu;
+
+  function scriptOf(text) {
+    let cjk = 0;
+    let latin = 0;
+    for (const char of text) {
+      if (/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(char)) cjk += 1;
+      else if (/[\p{L}\p{N}]/u.test(char)) latin += 1;
+    }
+    return cjk > latin ? "cjk" : latin > 0 ? "latin" : "";
+  }
+
+  function shingles(text) {
+    const set = new Set();
+    for (let index = 0; index + 4 <= text.length; index += 1) set.add(text.slice(index, index + 4));
+    return set;
+  }
+
+  /** Block chắc chắn không phải thoại, xét theo chữ và theo cả chapter (không phụ thuộc nền). */
+  function nonDialogue(blocks) {
+    const result = new Set();
+    const letters = blocks.map((block) => (String(block.text || "").match(LETTERS) || []).join("").toUpperCase());
+    const scripts = new Map();
+    letters.forEach((value) => {
+      const script = scriptOf(value);
+      if (script) scripts.set(script, (scripts.get(script) || 0) + value.length);
+    });
+    const mainScript = [...scripts.entries()].sort((a, b) => b[1] - a[1])[0];
+    const sizes = blocks
+      .filter((block, index) => letters[index].length >= 2 && block.lineSize > 0)
+      .map((block) => block.lineSize)
+      .sort((a, b) => a - b);
+    const medianSize = sizes.length >= 5 ? sizes[Math.floor(sizes.length / 2)] : 0;
+    const grams = letters.map((value) => (value.length >= REPEAT_MIN_CHARS ? shingles(value) : null));
+
+    blocks.forEach((block, index) => {
+      const text = String(block.text || "");
+      const value = letters[index];
+      if (NON_DIALOGUE.test(text) || DOMAIN_WORD.test(text)) result.add(block);
+      // Một chữ cái/chữ số đứng riêng: nét vẽ hay SFX bị OCR đọc thành chữ ("O", "C").
+      else if (/^[A-Z0-9]$/.test(value)) result.add(block);
+      // Một hai chữ khác hẳn hệ chữ của cả chapter (chữ Hán lẻ trong truyện tiếng Tây Ban Nha).
+      else if (mainScript && value.length <= 2 && scriptOf(value) && scriptOf(value) !== mainScript[0]) result.add(block);
+      else if (medianSize && block.lineSize > medianSize * SFX_MIN_SCALE && !CHAPTER_TITLE.test(text)) result.add(block);
+      else if (grams[index]) {
+        let similar = 0;
+        for (let other = 0; other < blocks.length && similar < REPEAT_MIN_OTHERS; other += 1) {
+          if (other === index || !grams[other]) continue;
+          const [small, large] = grams[index].size <= grams[other].size ? [grams[index], grams[other]] : [grams[other], grams[index]];
+          let shared = 0;
+          for (const gram of small) if (large.has(gram)) shared += 1;
+          if (small.size && shared / small.size >= REPEAT_MIN_SHARE) similar += 1;
+        }
+        if (similar >= REPEAT_MIN_OTHERS) result.add(block);
+      }
+    });
+    return result;
   }
 
   /**
@@ -729,6 +825,14 @@
     const y0 = Math.max(bounds.y, text.y - marginY);
     const y1 = Math.min(bounds.y + bounds.h, text.y + text.h + marginY);
     if (bounds.x >= x0 && bounds.x + bounds.w <= x1 && bounds.y >= y0 && bounds.y + bounds.h <= y1) return poly;
+    return clipPolygonToRect(poly, x0, y0, x1, y1);
+  }
+
+  /** Phần đa giác (dạng hàng trái/phải) nằm trong hình chữ nhật [x0,x1]×[y0,y1]; null nếu gần như rỗng. */
+  function clipPolygonToRect(poly, x0, y0, x1, y1) {
+    const bounds = polygonBounds(poly);
+    y0 = Math.max(y0, bounds.y);
+    y1 = Math.min(y1, bounds.y + bounds.h);
     if (y1 <= y0) return null;
     const left = [];
     const right = [];
@@ -858,12 +962,19 @@
       let y1 = Math.max(...group.map((line) => line.box.y + line.box.h), ...areas.map((area) => area.y + area.h));
       // Có đường bao thì khung = bao của đa giác (đúng biên bong bóng), tránh phủ sang bong bóng bên.
       const traced = bubblePolygon(group, width, height);
-      const poly = clipBubble(traced, {
+      const textNorm = {
         x: textX0 / width,
         y: textY0 / height,
         w: (textX1 - textX0) / width,
         h: (textY1 - textY0) / height,
-      }, group.length, vertical, width, height);
+      };
+      // Đường bao chỉ dùng khi nó bao trọn vùng chữ. Hụt thì về hình chữ nhật: nền phải che kín
+      // chữ gốc, thà hơi vuông còn hơn để chữ gốc lộ ra dưới bản dịch. `box` chỉ nới theo đường bao
+      // được dùng thật: nới theo vùng loang đã bị loại thì nền chữ nhật trùm cả bong bóng bên cạnh.
+      const poly = fitPolyToText(
+        clipBubble(traced, textNorm, group.length, vertical, width, height),
+        textNorm.x, textNorm.y, textNorm.w, textNorm.h
+      );
       if (poly) {
         for (let index = 0; index < poly.length; index += 2) {
           x0 = Math.min(x0, poly[index] * width);
@@ -887,9 +998,7 @@
           w: (textX1 - textX0) / width,
           h: (textY1 - textY0) / height,
         },
-        // Đường bao chỉ dùng khi nó bao trọn vùng chữ. Hụt thì về hình chữ nhật: nền phải che kín
-        // chữ gốc, thà hơi vuông còn hơn để chữ gốc lộ ra dưới bản dịch.
-        poly: fitPolyToText(poly, textX0 / width, textY0 / height, (textX1 - textX0) / width, (textY1 - textY0) / height),
+        poly,
         // Native dò được vùng nền khép kín quanh chữ — bằng chứng có bong bóng cho bộ lọc, kể cả khi
         // đường bao quá rộng để vẽ nền theo nó.
         traced: Boolean(traced),
@@ -899,6 +1008,9 @@
         vertical,
         confidence: Math.max(...group.map((line) => line.confidence)),
         lines: group.length,
+        // Cỡ một dòng chữ (pixel ảnh): chữ dọc là bề rộng một cột.
+        lineSize: (vertical ? textX1 - textX0 : textY1 - textY0) / group.length,
+        pixelSize: { w: width, h: height },
       });
     }
 
@@ -973,6 +1085,8 @@
         ...(block.textBox ? { x: [block.textBox.x, block.textBox.y, block.textBox.w, block.textBox.h] } : {}),
         ...(block.vertical ? { v: 1 } : {}),
         n: Number(block.lines) || 1,
+        ...(block.pixelSize ? { s: [block.pixelSize.w, block.pixelSize.h] } : {}),
+        ...(block.lineSize > 0 ? { l: Math.round(block.lineSize * 10) / 10 } : {}),
       }));
   }
 
@@ -988,6 +1102,8 @@
           : null,
         ...(item.v === 1 ? { vertical: true } : {}),
         lines: Number(item.n) || 1,
+        ...(Array.isArray(item.s) && item.s.length === 2 ? { pixelSize: { w: item.s[0], h: item.s[1] } } : {}),
+        ...(Number(item.l) > 0 ? { lineSize: Number(item.l) } : {}),
         text: String(item.t || ""),
         translation: String(item.t || ""),
       }))

@@ -219,12 +219,12 @@ test("groupLines lấy trung bình tỉ lệ enclose của các dòng trong bloc
 test("selectSpeechBlocks giữ nguyên khi lọc quá tay", () => {
   const blocks = [
     { text: "thoại", fill: 0.9, enclose: 1, bg: "#ffffff" },
-    { text: "a", fill: 0.2, bg: "#ffffff" },
-    { text: "b", fill: 0.2, bg: "#ffffff" },
-    { text: "c", fill: 0.2, bg: "#ffffff" },
-    { text: "d", fill: 0.2, bg: "#ffffff" },
-    { text: "e", fill: 0.2, bg: "#ffffff" },
-    { text: "f", fill: 0.2, bg: "#ffffff" },
+    { text: "một", fill: 0.2, bg: "#ffffff" },
+    { text: "hai", fill: 0.2, bg: "#ffffff" },
+    { text: "ba", fill: 0.2, bg: "#ffffff" },
+    { text: "bốn", fill: 0.2, bg: "#ffffff" },
+    { text: "năm", fill: 0.2, bg: "#ffffff" },
+    { text: "sáu", fill: 0.2, bg: "#ffffff" },
   ];
   assert.equal(core.selectSpeechBlocks(blocks).length, blocks.length);
 });
@@ -669,4 +669,61 @@ test("fitPolyToText bỏ vùng nền nằm ngoài chữ thay vì nối thành h�
   // Ca thật (Pepper&Carrot): điểm loang rơi ra khe trắng dưới bong bóng, vùng nền ở hẳn bên dưới chữ.
   const below = [0.42, 0.26, 0.42, 0.31, 0.65, 0.31, 0.65, 0.26];
   assert.equal(core.fitPolyToText(below, 0.486, 0.217, 0.096, 0.051), null);
+});
+
+test("selectSpeechBlocks bỏ watermark không có tên miền khi nó lặp lại trong chapter", () => {
+  const bubble = { fill: 0.9, enclose: 1, bg: "#ffffff" };
+  const blocks = [
+    { text: "ESCRIBIENDO ESTELINKENELNAVEGADOR,USTED PODRA LEER CON LA ME", ...bubble },
+    { text: "ESCRIBIENDOESTELINK:EN:ELNAVEGADOR,USTED PODRA LEERCON LAMEJ", ...bubble },
+    { text: "NELNAVEGADOR USTED PODRA LEERCON LA MEJORCALIDAD", ...bubble },
+    { text: "SUPONGO QUE ES PORQUE CONOCI A UN AMIGO", ...bubble },
+    { text: "ESTOY DICIENDO TONTERIAS", ...bubble },
+  ];
+  assert.deepEqual(
+    core.selectSpeechBlocks(blocks).map((block) => block.text),
+    ["SUPONGO QUE ES PORQUE CONOCI A UN AMIGO", "ESTOY DICIENDO TONTERIAS"]
+  );
+});
+
+test("selectSpeechBlocks bỏ SFX chữ to, chữ cái lẻ và chữ khác hệ chữ của chapter", () => {
+  const bubble = { fill: 0.9, enclose: 1, bg: "#ffffff" };
+  const dialogue = ["HOLA AMIGO", "QUE TAL", "MUY BIEN", "GRACIAS", "HASTA LUEGO", "ADIOS"]
+    .map((text) => ({ text, lineSize: 30, ...bubble }));
+  const blocks = [
+    ...dialogue,
+    { text: "TTTA", lineSize: 160, ...bubble },
+    { text: "O", lineSize: 30, ...bubble },
+    { text: "正", lineSize: 30, ...bubble },
+    { text: "Chapter 12", lineSize: 160, ...bubble },
+    { text: "¡¡AH!!", lineSize: 70, ...bubble },
+  ];
+  const kept = core.selectSpeechBlocks(blocks).map((block) => block.text);
+  assert.deepEqual(kept, [...dialogue.map((block) => block.text), "Chapter 12", "¡¡AH!!"]);
+});
+
+test("backdropFrame không gộp vùng bong bóng loang khi đã có hộp chữ gốc", () => {
+  // Ca thật (Test1): box trùm cả hai bong bóng dính nhau, nền chữ nhật cắt ngang viền.
+  const block = {
+    box: { x: 0.176, y: 0.029, w: 0.617, h: 0.062 },
+    textBox: { x: 0.454, y: 0.046, w: 0.281, h: 0.029 },
+    textArea: { x: 0.433, y: 0.036, w: 0.324, h: 0.049 },
+  };
+  const frame = core.backdropFrame(block);
+  assert.ok(frame.x > 0.4 && frame.x + frame.w < 0.8);
+});
+
+test("layoutTextAreas: nền theo đường bao chỉ phủ vùng chữ, không phủ cả vùng loang", () => {
+  const block = {
+    box: { x: 0.1, y: 0.1, w: 0.8, h: 0.3 },
+    textBox: { x: 0.4, y: 0.2, w: 0.2, h: 0.04 },
+    poly: [0.1, 0.1, 0.1, 0.4, 0.9, 0.4, 0.9, 0.1],
+    lines: 2,
+    lineSize: 20,
+    pixelSize: { w: 1000, h: 1000 },
+  };
+  core.layoutTextAreas([block]);
+  const frame = core.backdropFrame(block);
+  assert.ok(frame.w < 0.5 && frame.h < 0.2, JSON.stringify(frame));
+  assert.equal(core.polygonCoversBox(block.backdropPoly, 0.4, 0.2, 0.2, 0.04), true);
 });
