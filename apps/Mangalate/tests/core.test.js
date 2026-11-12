@@ -542,3 +542,131 @@ test("fitPolyToText nới đa giác bằng bao lồi để phủ kín chữ", ()
   const wide = [0.35, 0.35, 0.35, 0.65, 0.65, 0.65, 0.65, 0.35];
   assert.deepEqual(core.fitPolyToText(wide, 0.4, 0.4, 0.2, 0.05), wide);
 });
+// Các ca dưới đây lấy từ tools/e2e (webtoon scan, manga Nhật, truyện Mỹ chữ dày).
+
+test("selectSpeechBlocks bỏ watermark tên miền, kể cả khi OCR làm mất dấu chấm", () => {
+  const bubble = { fill: 0.9, enclose: 1, bg: "#ffffff" };
+  const blocks = [
+    { text: "TEMPLESCANESP.NET", ...bubble },
+    { text: "LEE ANTES EN: TEMPLESCANESPNET", ...bubble },
+    { text: "Lời thoại thật", ...bubble },
+    { text: "BUSCA EN INTERNET", ...bubble },
+  ];
+  assert.deepEqual(
+    core.selectSpeechBlocks(blocks).map((block) => block.text),
+    ["Lời thoại thật", "BUSCA EN INTERNET"]
+  );
+});
+
+test("isBubbleBackground không coi nền nâu/xám của tranh tối là bong bóng đen", () => {
+  assert.equal(core.isBubbleBackground("#0d0d0d"), true);
+  assert.equal(core.isBubbleBackground("#917c75"), false);
+  assert.equal(core.isBubbleBackground("#473c37"), false);
+  assert.equal(core.isBubbleBackground("#353031"), false);
+});
+
+test("selectSpeechBlocks nhận bong bóng chật (fill vừa) chỉ khi có đường bao khép kín", () => {
+  const poly = [0.1, 0.1, 0.1, 0.2, 0.3, 0.2, 0.3, 0.1];
+  const blocks = [
+    { text: "thoại sát viền", fill: 0.6, enclose: 1, bg: "#ffffff", poly },
+    { text: "SFX trên khoảng trắng", fill: 0.6, enclose: 1, bg: "#ffffff" },
+    { text: "thoại thường", fill: 0.9, enclose: 1, bg: "#ffffff" },
+  ];
+  assert.deepEqual(core.selectSpeechBlocks(blocks).map((block) => block.text), ["thoại sát viền", "thoại thường"]);
+});
+
+test("dedupeLines gộp hai lần đọc khác chữ của cùng một dòng, giữ lần đọc trọn", () => {
+  const lines = [
+    { text: "QUIEREAPRENDER..", box: { x: 0.3, y: 0.5, w: 0.3, h: 0.03 }, confidence: 0.9 },
+    { text: "QUIERE APRENDER..", box: { x: 0.29, y: 0.499, w: 0.33, h: 0.032 }, confidence: 0.8 },
+    { text: "dòng khác", box: { x: 0.3, y: 0.54, w: 0.3, h: 0.03 }, confidence: 0.8 },
+  ];
+  const kept = core.dedupeLines(lines);
+  assert.deepEqual(kept.map((line) => line.text), ["QUIERE APRENDER..", "dòng khác"]);
+});
+
+test("groupLines không gộp hai bong bóng sát nhau khi đường bao của chúng rời nhau", () => {
+  const line = (text, y, poly) => ({ text, box: { x: 0.3, y, w: 0.3, h: 0.02 }, confidence: 0.9, bg: "#ffffff", fill: 0.9, enclose: 1, poly });
+  const blocks = core.groupLines([
+    // Hai dòng cách nhau 0.005 (< 0.45 lần cao dòng): khoảng cách thôi thì sẽ bị gộp.
+    line("CAPTION", 0.1, [0.28, 0.09, 0.28, 0.122, 0.62, 0.122, 0.62, 0.09]),
+    line("BONG BÓNG", 0.125, [0.28, 0.123, 0.28, 0.16, 0.62, 0.16, 0.62, 0.123]),
+  ], 1000, 1000);
+  assert.equal(blocks.length, 2);
+});
+
+test("groupLines vẫn gộp các cột chữ dọc cùng bong bóng dù mỗi cột có đường bao riêng", () => {
+  const column = (text, x, poly) => ({ text, box: { x, y: 0.3, w: 0.02, h: 0.12 }, confidence: 0.9, bg: "#ffffff", fill: 0.9, enclose: 1, poly });
+  const blocks = core.groupLines([
+    column("手術の", 0.52, [0.49, 0.28, 0.49, 0.44, 0.56, 0.44, 0.56, 0.28]),
+    column("後で", 0.495, [0.47, 0.28, 0.47, 0.44, 0.54, 0.44, 0.54, 0.28]),
+  ], 1000, 1000);
+  assert.equal(blocks.length, 1);
+});
+
+test("groupLines cắt đường bao loang ra quá xa chữ (qua khe giữa các panel)", () => {
+  const blocks = core.groupLines([
+    {
+      text: "オレは",
+      box: { x: 0.38, y: 0.55, w: 0.08, h: 0.11 },
+      confidence: 0.9,
+      bg: "#ffffff",
+      fill: 0.9,
+      enclose: 1,
+      // Vùng loang xuống tận panel dưới và sang trái 0.23 trang.
+      poly: [0.15, 0.54, 0.15, 0.82, 0.47, 0.82, 0.47, 0.54],
+    },
+  ], 1000, 1000);
+  const poly = blocks[0].poly;
+  assert.ok(Array.isArray(poly) && poly.length >= 6);
+  const xs = poly.filter((_, index) => index % 2 === 0);
+  // Lề ngang tối đa 0.9 lần chiều cao chữ (0.099) → không còn tới x = 0.15.
+  assert.ok(Math.min(...xs) > 0.27, `đường bao vẫn loang: ${Math.min(...xs)}`);
+  assert.ok(blocks[0].box.x > 0.27);
+  assert.equal(core.polygonCoversBox(poly, 0.38, 0.55, 0.08, 0.11), true);
+});
+
+test("layoutTextAreas: cột dọc không nới vùng chữ ra ngoài lòng bong bóng", () => {
+  const block = {
+    box: { x: 0.55, y: 0.52, w: 0.155, h: 0.14 },
+    textBox: { x: 0.567, y: 0.538, w: 0.104, h: 0.112 },
+    vertical: true,
+    lines: 3,
+  };
+  core.layoutTextAreas([block]);
+  assert.ok(block.textArea.x >= block.box.x - 1e-9);
+  assert.ok(block.textArea.x + block.textArea.w <= block.box.x + block.box.w + 1e-9);
+});
+
+test("fitTextAreaToPolygon: bong bóng nghiêng vẫn được khung rộng, không bị bóp thành cột", () => {
+  // Ca thật (Pepper&Carrot): hai bong bóng gai liền nhau, đường bao chéo xuống phải.
+  const poly = [0.307, 0.824, 0.31, 0.818, 0.404, 0.813, 0.431, 0.818, 0.447, 0.829, 0.498, 0.885,
+    0.5012, 0.8903, 0.5012, 0.9013, 0.4979, 0.9334, 0.403, 0.939, 0.383, 0.939, 0.3661, 0.9331,
+    0.361, 0.928, 0.314, 0.868, 0.307, 0.857];
+  const block = {
+    box: { x: 0.307, y: 0.813, w: 0.198, h: 0.127 },
+    textBox: { x: 0.366, y: 0.885, w: 0.133, h: 0.048 },
+    poly,
+    vertical: false,
+    lines: 3,
+  };
+  core.layoutTextAreas([block]);
+  assert.ok(block.textArea.w > 0.1, `vùng chữ quá hẹp: ${block.textArea.w}`);
+});
+
+test("layoutTextAreas: hai vùng chữ xếp trên–dưới chồng nhau thì cắt ngang, không bóp bề rộng", () => {
+  // Hai block cùng một đường bao lớn: mỗi vùng chữ tự nới theo đường bao rồi chồng lên nhau.
+  const poly = [0.25, 0.25, 0.25, 0.55, 0.65, 0.55, 0.65, 0.25];
+  const box = { x: 0.25, y: 0.25, w: 0.4, h: 0.3 };
+  const top = { imageIndex: 0, box: { ...box }, textBox: { x: 0.32, y: 0.3, w: 0.26, h: 0.06 }, poly };
+  const bottom = { imageIndex: 0, box: { ...box }, textBox: { x: 0.32, y: 0.39, w: 0.26, h: 0.06 }, poly };
+  core.layoutTextAreas([top, bottom]);
+  assert.equal(intersects(top.textArea, bottom.textArea), false);
+  assert.ok(top.textArea.w > 0.2 && bottom.textArea.w > 0.2);
+});
+
+test("fitPolyToText bỏ vùng nền nằm ngoài chữ thay vì nối thành hình thang", () => {
+  // Ca thật (Pepper&Carrot): điểm loang rơi ra khe trắng dưới bong bóng, vùng nền ở hẳn bên dưới chữ.
+  const below = [0.42, 0.26, 0.42, 0.31, 0.65, 0.31, 0.65, 0.26];
+  assert.equal(core.fitPolyToText(below, 0.486, 0.217, 0.096, 0.051), null);
+});

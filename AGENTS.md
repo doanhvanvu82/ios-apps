@@ -115,6 +115,10 @@ Chứng chỉ dùng để ký có thể bị thu hồi → app không mở đư�
 - Dependency SwiftPM khai báo system library (vd `zlib`) sẽ link nhầm thư viện Linux → vendor vào `Vendor/` và bỏ phần đó
   (xem `apps/GameHub/Package.swift`).
 - Không chạy được app/simulator trên máy này: kiểm tra bằng build thành công + `unzip -l` IPA; hành vi thực tế do người dùng thử trên iPhone.
+  Riêng Mangalate: `apps/Mangalate/tools/e2e/run.py <thư mục chứa chapter>` chạy content script thật trên Chromium,
+  OCR bằng RapidOCR (venv `.state/mangalate-venv`) thay Vision + phân tích pixel của appex biên dịch cho Linux
+  (`tools/native-harness/build.sh`; `PageAnalyzer`/`PixelGrid` chỉ import Foundation) → ảnh trước/sau từng trang trong
+  `.state/mangalate-e2e/`; `tools/e2e/score.py` chấm lọc ô thoại bằng toạ độ chuẩn của bộ OpenMantra.
   Lỗi chỉ xảy ra trên máy thật: ghi log ra file trên máy (mẫu `apps/AdsBlocker/Sources/AdsBlocker/AppLog.swift`: Documents/Logs/<ngày>.log,
   Info.plist `UIFileSharingEnabled` + `LSSupportsOpeningDocumentsInPlace`), người dùng cắm USB → `toolkit/pull_app_logs.sh <bundleID>`
   rồi đọc `.state/logs/<bundleID>/`. Cách cũ (app POST log về `dev_server.py` `/log`, xem `apps/GameHub/build.sh`) cần cùng Wi-Fi.

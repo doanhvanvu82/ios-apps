@@ -184,8 +184,10 @@
       const vertical = isVerticalBlock(block, text);
       const widen = vertical ? TEXT_AREA_MAX_WIDEN_VERTICAL : TEXT_AREA_MAX_WIDEN;
       // Chỉ cột dọc được nới ra ngoài `box` (box của nó chính là dải chữ) — block thường phải giữ
-      // trong phạm vi đã chia với block bên cạnh, nếu không hai bản dịch sẽ đè nhau.
-      const grow = vertical ? ((widen - 1) / 2) * text.w : 0;
+      // trong phạm vi đã chia với block bên cạnh, nếu không hai bản dịch sẽ đè nhau. Cột dọc mà
+      // `box` đã rộng hơn hẳn dải chữ thì box là lòng bong bóng: nới ra ngoài là nền đè lên tranh.
+      const stripOnly = block.box.w <= text.w * 1.2;
+      const grow = vertical && stripOnly ? ((widen - 1) / 2) * text.w : 0;
       // Nới quá tay sang block bên cạnh thì block đó bị bóp còn vài chục pixel (cỡ chữ rơi
       // xuống 7px). Chỉ nới tới mép block gần nhất cùng dải hàng, phần còn lại để trống.
       let growLeft = grow;
@@ -317,7 +319,9 @@
         // Chia đều phần chồng hay cắt mất gần hết một bên khi block dọc nới rộng đè lên block
         // hẹp bên cạnh: bên hẹp còn ~30px nên câu dài tràn ra ngoài. Chia theo tỉ lệ bề rộng
         // hiện có — bên rộng vẫn đủ chỗ xuống dòng, bên hẹp giữ được phần của nó.
-        if (overlapX >= overlapY) {
+        // Cắt theo trục mà phần chồng MỎNG hơn: hai vùng xếp trên–dưới (chồng rộng, thấp) thì cắt
+        // ngang; cắt dọc ở ca đó bóp một bên thành cột hẹp, chữ vỡ từng mảnh (bong bóng xếp chéo).
+        if (overlapX <= overlapY) {
           const [left, right] = a.x <= b.x ? [a, b] : [b, a];
           const span = right.x + right.w - left.x;
           const total = left.w + right.w;
@@ -437,8 +441,10 @@
     );
     const maxHalf = Math.min(0.3, Math.max(area.h, text.h * TEXT_AREA_MAX_TALLEN) / 2);
     // Ưu tiên BỀ RỘNG: chữ càng rộng càng ít phải xuống dòng, cỡ chữ giữ được lớn. Chiều cao
-    // chỉ cần đủ chỗ cho số dòng gốc; đổi thêm chiều cao lấy bề rộng là lỗi cũ.
-    const minHeight = Math.min(maxHalf * 2, Math.max(text.h, 0.03));
+    // chỉ cần đủ chỗ cho số dòng gốc; đổi thêm chiều cao lấy bề rộng là lỗi cũ. Bản dịch xuống dòng
+    // lại nên khung rộng hơn chữ gốc cần ít chiều cao hơn: đòi đủ 100% chiều cao chữ gốc thì ở bong
+    // bóng nghiêng chỉ khung hẹp lọt, bản dịch thành cột vài chữ mỗi dòng.
+    const minHeight = Math.min(maxHalf * 2, Math.max(text.h * 0.6, 0.03));
     const step = 0.004;
     const fits = (y, left, right) => {
       const span = polygonSpanAt(poly, y);
@@ -465,7 +471,9 @@
         while (down + step <= maxHalf && fits(centerY + down + step, left, right)) down += step;
         const height = 2 * Math.min(up, down);
         if (height < minHeight) continue;
-        const score = width * height;
+        // Cao hơn mức chữ cần thì không giúp gì: tính cả phần đó thì khung hẹp-cao thắng khung rộng
+        // (bong bóng viền gai), bản dịch bị bóp thành cột vài chữ mỗi dòng.
+        const score = width * Math.min(height, text.h * TEXT_AREA_MAX_TALLEN);
         if (!best || score > best.score) best = { dx, width, height, score };
       }
     }
@@ -504,6 +512,9 @@
   function fitPolyToText(poly, x, y, w, h) {
     if (!Array.isArray(poly) || poly.length < 6) return null;
     if (polygonCoversBox(poly, x, y, w, h)) return poly;
+    // Vùng nền native dò được nằm ngoài chữ (điểm loang rơi ra khe dưới bong bóng): không phải bong
+    // bóng của chữ này — bao lồi với hộp chữ sẽ ra một hình thang phủ lên tranh.
+    if (polygonShareOfBox(poly, x, y, w, h) < 0.5) return null;
     const points = [];
     for (let index = 0; index < poly.length; index += 2) points.push([poly[index], poly[index + 1]]);
     points.push([x, y], [x + w, y], [x, y + h], [x + w, y + h]);
@@ -526,6 +537,18 @@
     const flat = [];
     for (const point of hull) flat.push(point[0], point[1]);
     return flat;
+  }
+
+  /** Tỉ lệ (0..1) hộp chữ nằm trong đa giác, đo trên vài hàng cắt ngang. */
+  function polygonShareOfBox(poly, x, y, w, h) {
+    if (w <= 0 || h <= 0) return 0;
+    const rows = 5;
+    let covered = 0;
+    for (let index = 0; index < rows; index += 1) {
+      const span = polygonSpanAt(poly, y + (h * (index + 0.5)) / rows);
+      if (span) covered += Math.max(0, Math.min(span.right, x + w) - Math.max(span.left, x));
+    }
+    return covered / (rows * w);
   }
 
   /** Bề rộng đa giác cắt ngang tại độ cao `y` (giao với các cạnh) — trả null nếu không cắt. */
@@ -587,17 +610,25 @@
   // Thoại thật trong bong bóng có dải nền quanh chữ gần như đồng nhất; SFX đặt trên khoảng trắng
   // của tranh chỉ đạt ~0.5-0.67 (đo trên chapter thật: thoại thấp nhất 0.72).
   const SPEECH_MIN_FILL = 0.68;
+  // Bong bóng chật (chữ sát viền, truyện khổ lớn chữ dày) chỉ đạt 0.55-0.68 — nhận nếu native dò
+  // được đường bao bong bóng khép kín quanh chữ, thứ SFX trên khoảng trắng của tranh không có.
+  // Đo bằng tools/e2e trên 214 trang OpenMantra: recall 0.69 → 0.72, precision giữ nguyên 0.96.
+  const SPEECH_MIN_FILL_BUBBLE = 0.55;
   // Tỉ lệ hướng quanh chữ gặp nét vẽ. Hạ thấp để không bỏ oan bong bóng trắng trên trang trắng,
   // nhưng đủ cao để chữ credit (phần lớn hướng trống) vẫn bị loại.
   const SPEECH_MIN_ENCLOSE = 0.45;
   const SPEECH_MIN_RATIO = 0.15;
-  // Dòng credit/quảng cáo của trang đọc truyện — không bao giờ là lời thoại.
-  const NON_DIALOGUE = /(https?:\/\/|www\.|\.com\b|read manga online|manga\s*\d*\s*fx)/i;
+  // Dòng credit/quảng cáo/watermark của trang đọc truyện — không bao giờ là lời thoại.
+  const NON_DIALOGUE = /(https?:\/\/|www\.|read manga online|manga\s*\d*\s*fx|\.\s?(?:com|net|org|io|me|xyz|cc|to|top|site|online|club|info|lat|gg|vn)\b)/i;
+  // Watermark tên miền mà OCR làm mất dấu chấm ("LEE ANTES EN: TEMPLESCANESPNET"): một từ liền từ
+  // 10 ký tự trở lên kết thúc bằng đuôi tên miền. Từ thật như "internet" ngắn hơn mốc này.
+  const DOMAIN_WORD = /(?:^|[^a-z0-9])[a-z0-9-]{7,}(?:com|net|org)(?![a-z0-9])/i;
   const SPEECH_MIN_LIGHT = 0.65;
   const SPEECH_MAX_CHROMA = 0.12;
-  // Bong bóng đen chữ trắng: gần như không màu và rất tối.
-  const SPEECH_DARK_MAX_LIGHT = 0.22;
-  const SPEECH_DARK_MAX_CHROMA = 0.2;
+  // Bong bóng đen chữ trắng: gần như đen tuyền. Ngưỡng cũ 0.22 nhận cả nền nâu/xám của tranh tối
+  // (#917c75 sáng ~0.21) — watermark đè lên tóc/áo bị coi là bong bóng đen và được "dịch".
+  const SPEECH_DARK_MAX_LIGHT = 0.02;
+  const SPEECH_DARK_MAX_CHROMA = 0.08;
 
   /** Nền bong bóng: trắng/kem/xám rất nhạt, hoặc đen gần như không màu (bong bóng chữ trắng). */
   function isBubbleBackground(background) {
@@ -623,8 +654,12 @@
     const minEnclose = (options && options.minEnclose) ?? SPEECH_MIN_ENCLOSE;
     const minRatio = (options && options.minRatio) ?? SPEECH_MIN_RATIO;
     const speech = all.filter((block) => {
-      if (NON_DIALOGUE.test(String(block.text || ""))) return false;
-      if (typeof block.fill === "number" && block.fill < minFill) return false;
+      const text = String(block.text || "");
+      if (NON_DIALOGUE.test(text) || DOMAIN_WORD.test(text)) return false;
+      const closedBubble = block.traced === true || (Array.isArray(block.poly) && block.poly.length >= 6);
+      if (typeof block.fill === "number" && block.fill < (closedBubble ? Math.min(minFill, SPEECH_MIN_FILL_BUBBLE) : minFill)) {
+        return false;
+      }
       if (typeof block.enclose === "number" && block.enclose < minEnclose) return false;
       if (!isBubbleBackground(block.bg)) return false;
       return true;
@@ -661,6 +696,89 @@
       result.push(Math.max(0, Math.min(1, x)) * width, Math.max(0, Math.min(1, y)) * height);
     }
     return result;
+  }
+
+  // Lề tối đa của đường bao so với hộp chữ. Ngang: 0.6 lần bề rộng chữ hoặc 0.9 lần chiều cao chữ —
+  // bong bóng chữ dọc nhiều cột rộng gần bằng chiều cao cột, và OCR hay chỉ đọc ra vài cột nên hộp
+  // chữ hẹp hơn bong bóng nhiều. Dọc: 2.5 lần cỡ MỘT dòng (chiều cao dòng; chữ dọc thì bề rộng một
+  // cột) — bong bóng tròn một dòng có lề trên/dưới gần gấp đôi dòng chữ, còn tính theo cả khối chữ
+  // thì khối nhiều dòng/cột dọc dài được loang xuống tận panel dưới. Không dưới BUBBLE_MIN_MARGIN bề
+  // ngang ảnh (chữ ngắn như "…" trong bong bóng
+  // to). Vượt xa hơn là vùng nền loang qua chỗ hở của bong bóng (đuôi bong bóng, bong bóng bị mép
+  // panel cắt, khe trắng giữa các panel).
+  const BUBBLE_MAX_MARGIN_X = 0.6;
+  const BUBBLE_MAX_MARGIN_X_BY_HEIGHT = 0.9;
+  const BUBBLE_MAX_MARGIN_LINES = 2.5;
+  const BUBBLE_MIN_MARGIN = 0.04;
+  const BUBBLE_CLIP_ROWS = 24;
+
+  /**
+   * Cắt đường bao (0..1) về khung hộp chữ + lề tối đa. Bỏ hẳn đường bao thì nền thành hình chữ nhật
+   * cắt ngang viền bong bóng; giữ nguyên thì thuỳ loang ra ngoài phủ lên tranh/panel bên cạnh. Cắt thì
+   * giữ phần bám viền bong bóng, chỉ bỏ thuỳ loang.
+   */
+  function clipBubble(poly, text, lines, vertical, width, height) {
+    if (!poly) return null;
+    const floor = BUBBLE_MIN_MARGIN * width;
+    const lineSize = (vertical ? text.w * width : text.h * height) / Math.max(1, lines);
+    const marginX = Math.max(BUBBLE_MAX_MARGIN_X * text.w * width, BUBBLE_MAX_MARGIN_X_BY_HEIGHT * text.h * height, floor) / width;
+    const marginY = Math.max(BUBBLE_MAX_MARGIN_LINES * lineSize, floor) / height;
+    const bounds = polygonBounds(poly);
+    const x0 = text.x - marginX;
+    const x1 = text.x + text.w + marginX;
+    const y0 = Math.max(bounds.y, text.y - marginY);
+    const y1 = Math.min(bounds.y + bounds.h, text.y + text.h + marginY);
+    if (bounds.x >= x0 && bounds.x + bounds.w <= x1 && bounds.y >= y0 && bounds.y + bounds.h <= y1) return poly;
+    if (y1 <= y0) return null;
+    const left = [];
+    const right = [];
+    for (let index = 0; index < BUBBLE_CLIP_ROWS; index += 1) {
+      // Tránh đúng đỉnh/đáy đa giác, nơi đường cắt ngang chỉ chạm một điểm.
+      const y = y0 + ((y1 - y0) * (index + 0.5)) / BUBBLE_CLIP_ROWS;
+      const span = polygonSpanAt(poly, y);
+      if (!span) continue;
+      const l = Math.max(span.left, x0);
+      const r = Math.min(span.right, x1);
+      if (r <= l) continue;
+      left.push(l, y);
+      right.unshift(r, y);
+    }
+    if (left.length < 4) return null;
+    return left.concat(right);
+  }
+
+  /** Hộp bao của đa giác phẳng [x, y, ...]. */
+  function polygonBounds(poly) {
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (let index = 0; index < poly.length; index += 2) {
+      x0 = Math.min(x0, poly[index]);
+      x1 = Math.max(x1, poly[index]);
+      y0 = Math.min(y0, poly[index + 1]);
+      y1 = Math.max(y1, poly[index + 1]);
+    }
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
+
+  /**
+   * Hai dòng đều có đường bao bong bóng bao lấy chính nó, và hai vùng đó gần như không chồng nhau:
+   * hai bong bóng/caption riêng. Chữ viết dày (truyện tranh khổ lớn) đặt các bong bóng sát nhau hơn
+   * khoảng cách dòng mà `shouldMerge` dùng, chỉ đường bao mới tách được. Các cột chữ dọc của cùng
+   * một bong bóng mỗi cột loang ra một vùng riêng nhưng các vùng đó luôn chồng lên nhau — không tách.
+   */
+  function inDifferentBubbles(a, b) {
+    if (!a.poly || !b.poly) return false;
+    const boundsA = polygonBounds(a.poly);
+    const boundsB = polygonBounds(b.poly);
+    const inside = (box, bounds) => {
+      const cx = box.x + box.w / 2;
+      const cy = box.y + box.h / 2;
+      return cx >= bounds.x && cx <= bounds.x + bounds.w && cy >= bounds.y && cy <= bounds.y + bounds.h;
+    };
+    if (!inside(a.box, boundsA) || !inside(b.box, boundsB)) return false;
+    return containment(boundsA, boundsB) < 0.05;
   }
 
   /**
@@ -710,6 +828,7 @@
 
     for (let i = 0; i < pixels.length; i++) {
       for (let j = i + 1; j < pixels.length; j++) {
+        if (inDifferentBubbles(pixels[i], pixels[j])) continue;
         if (shouldMerge(pixels[i].box, pixels[j].box)) union(i, j);
       }
     }
@@ -738,7 +857,13 @@
       let x1 = Math.max(...group.map((line) => line.box.x + line.box.w), ...areas.map((area) => area.x + area.w));
       let y1 = Math.max(...group.map((line) => line.box.y + line.box.h), ...areas.map((area) => area.y + area.h));
       // Có đường bao thì khung = bao của đa giác (đúng biên bong bóng), tránh phủ sang bong bóng bên.
-      const poly = bubblePolygon(group, width, height);
+      const traced = bubblePolygon(group, width, height);
+      const poly = clipBubble(traced, {
+        x: textX0 / width,
+        y: textY0 / height,
+        w: (textX1 - textX0) / width,
+        h: (textY1 - textY0) / height,
+      }, group.length, vertical, width, height);
       if (poly) {
         for (let index = 0; index < poly.length; index += 2) {
           x0 = Math.min(x0, poly[index] * width);
@@ -765,6 +890,9 @@
         // Đường bao chỉ dùng khi nó bao trọn vùng chữ. Hụt thì về hình chữ nhật: nền phải che kín
         // chữ gốc, thà hơi vuông còn hơn để chữ gốc lộ ra dưới bản dịch.
         poly: fitPolyToText(poly, textX0 / width, textY0 / height, (textX1 - textX0) / width, (textY1 - textY0) / height),
+        // Native dò được vùng nền khép kín quanh chữ — bằng chứng có bong bóng cho bộ lọc, kể cả khi
+        // đường bao quá rộng để vẽ nền theo nó.
+        traced: Boolean(traced),
         bg: mostCommonBackground(group),
         fill: group.reduce((sum, line) => sum + line.fill, 0) / group.length,
         enclose: group.reduce((sum, line) => sum + line.enclose, 0) / group.length,
@@ -794,23 +922,39 @@
     return 0.2126 * channel((value >> 16) & 255) + 0.7152 * channel((value >> 8) & 255) + 0.0722 * channel(value & 255);
   }
 
-  /** Tile chồng mép làm một dòng xuất hiện ở hai tile — gộp lại theo vị trí trùng nhau. */
+  /** Phần diện tích chung so với box nhỏ hơn: 1 khi một box nằm trọn trong box kia. */
+  function containment(a, b) {
+    const intersection = overlap1D(a.x, a.x + a.w, b.x, b.x + b.w) * overlap1D(a.y, a.y + a.h, b.y, b.y + b.h);
+    const smaller = Math.min(a.w * a.h, b.w * b.h);
+    return smaller > 0 ? intersection / smaller : 0;
+  }
+
+  /**
+   * Tile chồng mép làm một dòng xuất hiện ở hai tile — gộp lại theo vị trí trùng nhau.
+   * Hai lần đọc của cùng một dòng có thể ra chữ khác nhau (thiếu dấu cách, dòng ở mép tile bị cắt
+   * cụt), nên box gần như nằm trong nhau cũng là trùng; khi đó giữ box lớn hơn (dòng đọc trọn).
+   */
   function dedupeLines(lines) {
     const kept = [];
     for (const line of lines) {
       if (!line || !line.box) continue;
-      const duplicate = kept.find((other) => other.text === line.text && iou(other.box, line.box) > 0.5);
+      const duplicate = kept.find((other) =>
+        (other.text === line.text && iou(other.box, line.box) > 0.5) || containment(other.box, line.box) > 0.7
+      );
       if (!duplicate) {
         kept.push(line);
-      } else if ((line.confidence || 0) > (duplicate.confidence || 0)) {
-        Object.assign(duplicate, line);
+        continue;
       }
+      const better = duplicate.text === line.text
+        ? (line.confidence || 0) > (duplicate.confidence || 0)
+        : line.box.w * line.box.h > duplicate.box.w * duplicate.box.h;
+      if (better) Object.assign(duplicate, line);
     }
     return kept;
   }
 
   // Cache bản dịch theo ảnh. Tăng CACHE_VERSION khi đổi prompt/định dạng để bỏ cache cũ.
-  const CACHE_VERSION = "v30";
+  const CACHE_VERSION = "v31";
 
   function cacheKey(model, url) {
     return `mangalate:${CACHE_VERSION}:${model || "default"}:${url}`;

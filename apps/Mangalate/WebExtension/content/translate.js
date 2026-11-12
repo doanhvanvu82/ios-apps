@@ -272,7 +272,8 @@
     // Cache theo URL ảnh + model: ảnh đã dịch thì bỏ qua cả OCR lẫn gọi Gemini.
     const keys = images.map((image) => cacheKeyFor(image, state.model));
     const cached = await Promise.all(keys.map((key) => (key ? cacheGet(key) : null)));
-    const results = new Array(images.length);
+    // fill(null): mảng thưa bị filter bỏ qua ô trống → đếm sai số ảnh cần OCR.
+    const results = new Array(images.length).fill(null);
     cached.forEach((entry, index) => {
       if (entry) results[index] = { cached: entry };
     });
@@ -357,6 +358,26 @@
     core.layoutTextAreas(speech);
     for (const block of speech) {
       if (block.el) placeBlock(block);
+    }
+    // Móc cho tools/e2e: trang thử định nghĩa hàm này để chấm bộ lọc ô thoại với dữ liệu chuẩn.
+    // Content script trên Safari chạy ở world riêng nên trang thật không chen vào được.
+    if (typeof globalThis.__mangalateBlocks === "function") {
+      globalThis.__mangalateBlocks(blocks.map((block) => ({
+        src: block.image && (block.image.currentSrc || block.image.src || ""),
+        text: block.text,
+        box: block.box,
+        textBox: block.textBox,
+        poly: Array.isArray(block.poly) && block.poly.length >= 6,
+        polygon: block.poly || null,
+        textArea: block.textArea || null,
+        traced: block.traced === true,
+        fill: block.fill,
+        enclose: block.enclose,
+        bg: block.bg,
+        vertical: block.vertical,
+        lines: block.lines,
+        kept: speech.includes(block),
+      })));
     }
     state.blocks = speech;
     blocks = speech;
