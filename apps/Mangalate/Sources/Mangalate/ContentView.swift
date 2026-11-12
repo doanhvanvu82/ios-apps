@@ -32,6 +32,10 @@ struct ContentView: View {
                     Label("Bấm **Bản gốc** để xem lại; bấm **Bản dịch** để hiện lại.", systemImage: "arrow.left.arrow.right")
                 }
 
+                if #available(iOS 26.4, *) {
+                    OfflinePacksSection()
+                }
+
                 Section("Lưu ý") {
                     Text("Ảnh truyện không bao giờ được gửi lên AI — chỉ text OCR. API key lưu trong Keychain của máy.")
                     Text("Chữ dọc (truyện Nhật/Trung) và font cách điệu có thể nhận sai; truyện không lời sẽ không có gì để dịch.")

@@ -8,7 +8,8 @@ import UIKit
 /// Không action nào trả ảnh; ảnh chỉ được đọc trên máy để OCR.
 ///
 /// Message:
-///   {action: "getSettings"}                     → {ok, hasKey, model}
+///   {action: "getSettings"}                     → {ok, hasKey, model, offline}
+///   (model "apple-offline" = dịch trên máy bằng Apple Translation, không cần key)
 ///   {action: "saveSettings", apiKey?, model?}   → {ok}   (apiKey "" = xoá key)
 ///   {action: "listModels"}                      → {ok, models: [{id, name}]}
 ///   {action: "ocr", image, languages?}          → {ok, lines: [{text, confidence, box, bg}]}
@@ -41,7 +42,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         let action = message["action"] as? String ?? ""
         switch action {
         case "getSettings":
-            return ["ok": true, "hasKey": Settings.apiKey != nil, "model": Settings.model]
+            return ["ok": true, "hasKey": Settings.apiKey != nil, "model": Settings.model, "offline": Settings.isOffline]
 
         case "saveSettings":
             if let apiKey = message["apiKey"] as? String {
@@ -60,15 +61,15 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             let blocks = try textBlocks(message)
             let context = message["context"] as? String ?? ""
             let started = Date()
-            let translations = try await client().translate(
-                model: Settings.model,
-                blocks: blocks,
-                context: String(context.prefix(4000))
-            )
-            ExtLog.log("dịch \(blocks.count) block trong \(String(format: "%.1f", Date().timeIntervalSince(started)))s")
+            let translations = try await Settings.isOffline
+                ? offlineTranslate(blocks)
+                : client().translate(model: Settings.model, blocks: blocks, context: String(context.prefix(4000)))
+            ExtLog.log("dịch \(blocks.count) block (\(Settings.model)) trong \(String(format: "%.1f", Date().timeIntervalSince(started)))s")
             return ["ok": true, "translations": translations]
 
         case "analyze":
+            // Apple Translation dịch từng câu, không nhận hồ sơ chapter.
+            if Settings.isOffline { return ["ok": true, "context": ""] }
             let blocks = try textBlocks(message)
             let started = Date()
             let context = try await client().analyze(model: Settings.model, blocks: blocks)
@@ -131,6 +132,13 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         return UIImage(data: data)
     }
 
+    private static func offlineTranslate(_ blocks: [[String: Any]]) async throws -> [[String: Any]] {
+        guard #available(iOS 26.4, *) else {
+            throw MangalateError("Dịch offline cần iOS 26.4 trở lên.")
+        }
+        return try await OfflineTranslator.translate(blocks: blocks)
+    }
+
     private static func client() throws -> GeminiClient {
         guard let apiKey = Settings.apiKey, !apiKey.isEmpty else {
             throw MangalateError("Chưa nhập Gemini API key. Mở popup Mangalate để nhập.")
@@ -144,6 +152,10 @@ enum Settings {
     private static let modelKey = "geminiModel"
     private static let apiKeyAccount = "geminiApiKey"
     static let defaultModel = "gemini-2.5-flash"
+    /// "Model" giả cho Apple Translation trên máy — trùng `OFFLINE_MODEL` trong popup.js.
+    static let offlineModel = "apple-offline"
+
+    static var isOffline: Bool { model == offlineModel }
 
     static var model: String {
         get { UserDefaults.standard.string(forKey: modelKey) ?? defaultModel }

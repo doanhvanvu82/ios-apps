@@ -220,10 +220,10 @@
       showAskError(error);
       return;
     }
-    if (!settings.hasKey) {
+    if (!settings.hasKey && !settings.offline) {
       showPanel(
         "Chưa có Gemini API key",
-        "Mở biểu tượng ô ghép hình trên thanh địa chỉ → Mangalate → nhập API key rồi bấm Lưu key.",
+        "Mở biểu tượng ô ghép hình trên thanh địa chỉ → Mangalate → nhập API key rồi bấm Lưu key, hoặc chọn model Offline để dịch trên máy.",
         [{ label: "Đã hiểu", run: () => {} }]
       );
       return;

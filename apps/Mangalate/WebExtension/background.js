@@ -48,7 +48,7 @@ async function nativeOnce(payload) {
 
 async function settings() {
   const reply = await native({ action: "getSettings" });
-  const value = { hasKey: reply.hasKey === true, model: String(reply.model || "") };
+  const value = { hasKey: reply.hasKey === true, model: String(reply.model || ""), offline: reply.offline === true };
   // Content script đọc model này để kiểm tra cache khi vào chapter mà không cần đánh thức appex.
   browser.storage.local.set({ mangalateModel: value.model }).catch(() => {});
   return value;

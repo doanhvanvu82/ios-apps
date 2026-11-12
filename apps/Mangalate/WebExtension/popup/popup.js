@@ -3,6 +3,9 @@
 const $ = (id) => document.getElementById(id);
 let toastTimer = 0;
 let busy = false;
+// Trùng `Settings.offlineModel` trong SafariWebExtensionHandler.swift.
+const OFFLINE_MODEL = "apple-offline";
+const OFFLINE_LABEL = "Offline – Apple Dịch trên máy (không cần key)";
 
 async function call(message) {
   const reply = await browser.runtime.sendMessage(message);
@@ -38,6 +41,9 @@ function run(button, task) {
 
 function ensureModelOption(id) {
   const select = $("model");
+  if (![...select.options].some((option) => option.value === OFFLINE_MODEL)) {
+    select.add(new Option(OFFLINE_LABEL, OFFLINE_MODEL));
+  }
   if (!id) return;
   if (![...select.options].some((option) => option.value === id)) {
     select.add(new Option(id, id));
@@ -45,10 +51,15 @@ function ensureModelOption(id) {
   select.value = id;
 }
 
+function statusText(settings) {
+  if (settings.offline) return "Đang dịch offline (Apple Dịch trên máy).";
+  return settings.hasKey ? `Đã lưu key. Model: ${settings.model}` : "Chưa có API key.";
+}
+
 async function refresh() {
   try {
     const settings = await call({ type: "getSettings" });
-    $("key-status").textContent = settings.hasKey ? `Đã lưu key. Model: ${settings.model}` : "Chưa có API key.";
+    $("key-status").textContent = statusText(settings);
     ensureModelOption(settings.model);
   } catch (error) {
     $("key-status").textContent = `Chưa sẵn sàng: ${error.message || error}`;
@@ -60,7 +71,7 @@ async function saveKey() {
   if (!apiKey) throw new Error("Dán API key vào ô trước đã.");
   const settings = await call({ type: "saveSettings", apiKey });
   $("api-key").value = "";
-  $("key-status").textContent = `Đã lưu key. Model: ${settings.model}`;
+  $("key-status").textContent = statusText(settings);
   ensureModelOption(settings.model);
   toast("Đã lưu API key.");
 }
@@ -70,20 +81,21 @@ async function loadModels() {
   if (!models.length) throw new Error("Gemini không trả model nào dùng được.");
   const select = $("model");
   const current = select.value;
-  select.replaceChildren(...models.map((model) => new Option(`${model.name} (${model.id})`, model.id)));
+  select.replaceChildren(
+    ...models.map((model) => new Option(`${model.name} (${model.id})`, model.id)),
+    new Option(OFFLINE_LABEL, OFFLINE_MODEL)
+  );
   const settings = await call({ type: "getSettings" });
-  const chosen = [current, settings.model, models[0].id].find((id) => models.some((model) => model.id === id));
+  const chosen = [current, settings.model, models[0].id].find((id) => [...select.options].some((option) => option.value === id));
   select.value = chosen;
-  await call({ type: "saveSettings", model: chosen });
-  $("key-status").textContent = `Đã lưu key. Model: ${chosen}`;
+  $("key-status").textContent = statusText(await call({ type: "saveSettings", model: chosen }));
   toast(`Đã tải ${models.length} model.`);
 }
 
 async function changeModel() {
   const model = $("model").value;
   if (!model) return;
-  const settings = await call({ type: "saveSettings", model });
-  $("key-status").textContent = settings.hasKey ? `Đã lưu key. Model: ${settings.model}` : "Chưa có API key.";
+  $("key-status").textContent = statusText(await call({ type: "saveSettings", model }));
 }
 
 async function translateTab() {
