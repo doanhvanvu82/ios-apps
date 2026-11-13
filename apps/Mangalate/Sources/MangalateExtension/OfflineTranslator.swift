@@ -16,7 +16,7 @@ enum OfflineTranslator {
     }
 
     /// [{id, text}] → [{id, text}] tiếng Việt. Mọi block dịch theo ngôn ngữ chính của chapter; chỉ block viết bằng
-    /// hệ chữ khác hẳn (vd chữ Hàn trong truyện tiếng Anh) mới được đoán riêng và chỉ khi gói đó đã tải.
+    /// hệ chữ khác hẳn (vd chữ Hàn trong truyện tiếng Anh) mới được đoán riêng.
     static func translate(blocks: [[String: Any]], language hint: String?) async throws -> [[String: Any]] {
         let sources = Dictionary(
             (await OfflineLanguages.sources()).map { ($0.key, $0) },
@@ -30,50 +30,63 @@ enum OfflineTranslator {
             throw MangalateError("Không nhận ra ngôn ngữ của chữ trên trang, hoặc Apple Dịch không hỗ trợ ngôn ngữ này.")
         }
 
-        let availability = LanguageAvailability(preferredStrategy: .highFidelity)
-        guard try await isInstalled(dominantSource, availability) else {
-            throw MangalateError("Chưa tải gói dịch \(dominantSource.name) → Việt. Mở app Mangalate › Dịch offline để tải.")
-        }
+        // Không kiểm tra `LanguageAvailability.status` trước khi dịch: trong appex nó báo `.supported`
+        // (chưa tải) cho cả gói app chính đã tải xong. Dịch thẳng, lỗi thật mới báo.
         let dominantScript = Script.of(texts.joined())
-        var installed: [NLLanguage: Bool] = [dominant: true]
         var groups: [NLLanguage: [TranslationSession.Request]] = [:]
         for block in blocks {
             guard let id = block["id"] as? Int, let text = block["text"] as? String else { continue }
             var language = dominant
             if Script.of(text) != dominantScript,
-               let other = detect(text, among: keys, minConfidence: 0.8), let source = sources[other] {
-                if installed[other] == nil { installed[other] = (try? await isInstalled(source, availability)) ?? false }
-                if installed[other] == true { language = other }
+               let other = detect(text, among: keys, minConfidence: 0.8), sources[other] != nil {
+                language = other
             }
             groups[language, default: []].append(TranslationSession.Request(sourceText: text, clientIdentifier: String(id)))
         }
 
         var translations: [[String: Any]] = []
-        for (key, requests) in groups {
+        var retry: [TranslationSession.Request] = []
+        for (key, requests) in groups where key != dominant {
             guard let source = sources[key] else { continue }
-            let session = TranslationSession(
-                installedSource: source.language,
-                target: OfflineLanguages.target,
-                preferredStrategy: .highFidelity
-            )
-            for response in try await session.translations(from: requests) {
-                guard let id = response.clientIdentifier.flatMap(Int.init) else { continue }
-                translations.append(["id": id, "text": response.targetText])
+            do {
+                translations += try await run(requests, from: source)
+            } catch {
+                // Gói phụ chưa tải: dịch các block đó theo ngôn ngữ chính còn hơn bỏ cả trang.
+                ExtLog.log("offline: \(source.language.minimalIdentifier) lỗi (\(error)) → dịch theo \(dominantSource.language.minimalIdentifier)")
+                retry += requests
             }
+        }
+        do {
+            translations += try await run((groups[dominant] ?? []) + retry, from: dominantSource)
+        } catch {
+            let status = await LanguageAvailability(preferredStrategy: .highFidelity)
+                .status(from: dominantSource.language, to: OfflineLanguages.target)
+            ExtLog.log("offline: \(dominantSource.language.maximalIdentifier) lỗi \(error) (status \(status))")
+            if status == .unsupported {
+                throw MangalateError("Apple Dịch không hỗ trợ \(dominantSource.name) → Việt.")
+            }
+            throw MangalateError("Không dịch được \(dominantSource.name) → Việt (\(error.localizedDescription)). Nếu gói chưa tải: mở app Mangalate › Dịch offline để tải.")
         }
         return translations
     }
 
-    private static func isInstalled(_ source: OfflineLanguages.Source, _ availability: LanguageAvailability) async throws -> Bool {
-        switch await availability.status(from: source.language, to: OfflineLanguages.target) {
-        case .installed:
-            return true
-        case .supported:
-            return false
-        case .unsupported:
-            throw MangalateError("Apple Dịch không hỗ trợ \(source.name) → Việt.")
-        @unknown default:
-            throw MangalateError("Apple Dịch không hỗ trợ \(source.name) → Việt.")
+    /// Ưu tiên bản dịch chất lượng cao; gói chất lượng cao không dùng được thì thử gói chuẩn.
+    private static func run(_ requests: [TranslationSession.Request], from source: OfflineLanguages.Source) async throws -> [[String: Any]] {
+        guard !requests.isEmpty else { return [] }
+        let responses: [TranslationSession.Response]
+        do {
+            responses = try await TranslationSession(
+                installedSource: source.language,
+                target: OfflineLanguages.target,
+                preferredStrategy: .highFidelity
+            ).translations(from: requests)
+        } catch {
+            ExtLog.log("offline: highFidelity \(source.language.minimalIdentifier) lỗi \(error), thử gói chuẩn")
+            responses = try await TranslationSession(installedSource: source.language, target: OfflineLanguages.target)
+                .translations(from: requests)
+        }
+        return responses.compactMap { response in
+            response.clientIdentifier.flatMap(Int.init).map { ["id": $0, "text": response.targetText] }
         }
     }
 
