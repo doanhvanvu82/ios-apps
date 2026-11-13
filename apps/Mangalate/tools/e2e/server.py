@@ -33,6 +33,12 @@ OCR_CACHE = os.path.join(STATE, "ocr-cache")
 IMAGE_EXT = (".jpg", ".jpeg", ".png", ".webp")
 # Vision bỏ dòng có độ tin cậy dưới ngưỡng này (TextRecognizer.recognizeLines).
 MIN_CONFIDENCE = 0.25
+# Vision tự nhận chữ Hàn; RapidOCR mặc định chỉ đọc Trung/Anh nên manhwa raw cần model riêng:
+# MANGALATE_OCR_LANG=ko (model + dict tải vào .state/mangalate/ocr-models từ RapidAI/RapidOCR trên ModelScope).
+OCR_LANG = os.environ.get("MANGALATE_OCR_LANG", "")
+OCR_MODELS = {
+    "ko": ("korean_PP-OCRv4_rec_mobile.onnx", "korean_dict.txt"),
+}
 
 _engine = None
 # RapidOCR không an toàn khi gọi song song (content script OCR 2 ảnh một lúc).
@@ -43,7 +49,11 @@ def engine():
     global _engine
     if _engine is None:
         from rapidocr_onnxruntime import RapidOCR
-        _engine = RapidOCR()
+        if OCR_LANG:
+            model, keys = (os.path.join(STATE, "ocr-models", name) for name in OCR_MODELS[OCR_LANG])
+            _engine = RapidOCR(rec_model_path=model, rec_keys_path=keys)
+        else:
+            _engine = RapidOCR()
     return _engine
 
 
@@ -51,7 +61,7 @@ def recognize(image):
     """Dòng chữ trong ảnh như Vision: [{text, confidence, box:[x,y,w,h] pixel}]. Có cache theo nội dung ảnh."""
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
-    key = hashlib.sha1(buffer.getvalue()).hexdigest()
+    key = hashlib.sha1(buffer.getvalue()).hexdigest() + (f".{OCR_LANG}" if OCR_LANG else "")
     path = os.path.join(OCR_CACHE, key + ".json")
     if os.path.exists(path):
         with open(path, encoding="utf-8") as fh:

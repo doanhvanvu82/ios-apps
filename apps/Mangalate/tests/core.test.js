@@ -595,6 +595,17 @@ test("groupLines không gộp hai bong bóng sát nhau khi đường bao của c
   assert.equal(blocks.length, 2);
 });
 
+test("groupLines gộp dòng giãn rộng khi cùng một đường bao bong bóng, không có đường bao thì không", () => {
+  const bubble = [0.2, 0.05, 0.2, 0.25, 0.7, 0.25, 0.7, 0.05];
+  // Cách nhau 0.012 = 0.6 lần cao dòng (font manhwa giãn dòng rộng).
+  const lines = (poly) => [
+    { text: "IT MUST'VE", box: { x: 0.35, y: 0.1, w: 0.2, h: 0.02 }, confidence: 0.9, bg: "#ffffff", fill: 0.9, enclose: 1, poly },
+    { text: "BEEN HARD RAISING", box: { x: 0.3, y: 0.132, w: 0.3, h: 0.02 }, confidence: 0.9, bg: "#ffffff", fill: 0.9, enclose: 1, poly },
+  ];
+  assert.equal(core.groupLines(lines(bubble), 1000, 1000).length, 1);
+  assert.equal(core.groupLines(lines(undefined), 1000, 1000).length, 2);
+});
+
 test("groupLines vẫn gộp các cột chữ dọc cùng bong bóng dù mỗi cột có đường bao riêng", () => {
   const column = (text, x, poly) => ({ text, box: { x, y: 0.3, w: 0.02, h: 0.12 }, confidence: 0.9, bg: "#ffffff", fill: 0.9, enclose: 1, poly });
   const blocks = core.groupLines([
@@ -686,7 +697,7 @@ test("selectSpeechBlocks bỏ watermark không có tên miền khi nó lặp l�
   );
 });
 
-test("selectSpeechBlocks bỏ SFX chữ to, chữ cái lẻ và chữ khác hệ chữ của chapter", () => {
+test("selectSpeechBlocks bỏ SFX chữ to, chữ cái lẻ, chữ Latin dọc và chữ khác hệ chữ của chapter", () => {
   const bubble = { fill: 0.9, enclose: 1, bg: "#ffffff" };
   const dialogue = ["HOLA AMIGO", "QUE TAL", "MUY BIEN", "GRACIAS", "HASTA LUEGO", "ADIOS"]
     .map((text) => ({ text, lineSize: 30, ...bubble }));
@@ -697,9 +708,11 @@ test("selectSpeechBlocks bỏ SFX chữ to, chữ cái lẻ và chữ khác hệ
     { text: "正", lineSize: 30, ...bubble },
     { text: "Chapter 12", lineSize: 160, ...bubble },
     { text: "¡¡AH!!", lineSize: 70, ...bubble },
+    { text: "TEMPLESCANES", lineSize: 30, vertical: true, ...bubble },
+    { text: "!", lineSize: 30, vertical: true, ...bubble },
   ];
   const kept = core.selectSpeechBlocks(blocks).map((block) => block.text);
-  assert.deepEqual(kept, [...dialogue.map((block) => block.text), "Chapter 12", "¡¡AH!!"]);
+  assert.deepEqual(kept, [...dialogue.map((block) => block.text), "Chapter 12", "¡¡AH!!", "!"]);
 });
 
 test("backdropFrame không gộp vùng bong bóng loang khi đã có hộp chữ gốc", () => {
@@ -726,4 +739,23 @@ test("layoutTextAreas: nền theo đường bao chỉ phủ vùng chữ, không 
   const frame = core.backdropFrame(block);
   assert.ok(frame.w < 0.5 && frame.h < 0.2, JSON.stringify(frame));
   assert.equal(core.polygonCoversBox(block.backdropPoly, 0.4, 0.2, 0.2, 0.04), true);
+});
+
+test("layoutTextAreas: ảnh webtoon dài vẫn đặt chữ theo bề ngang bong bóng, không bóp thành cột hẹp", () => {
+  // Ca thật (Test4): ảnh 800×8000, bong bóng elip rộng 0.46 bề ngang, 3 dòng chữ.
+  const ellipse = [];
+  for (let index = 0; index < 32; index += 1) {
+    const angle = (index / 32) * 2 * Math.PI;
+    ellipse.push(0.6 + 0.23 * Math.cos(angle), 0.265 + 0.018 * Math.sin(angle));
+  }
+  const block = {
+    box: { x: 0.37, y: 0.247, w: 0.46, h: 0.036 },
+    textBox: { x: 0.476, y: 0.258, w: 0.25, h: 0.014 },
+    poly: ellipse,
+    lines: 3,
+    lineSize: 37,
+    pixelSize: { w: 800, h: 8000 },
+  };
+  core.layoutTextAreas([block]);
+  assert.ok(block.textArea.w >= block.textBox.w, JSON.stringify(block.textArea));
 });

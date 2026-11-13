@@ -62,15 +62,22 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             let context = message["context"] as? String ?? ""
             let started = Date()
             let translations = try await Settings.isOffline
-                ? offlineTranslate(blocks)
+                ? offlineTranslate(blocks, language: message["language"] as? String)
                 : client().translate(model: Settings.model, blocks: blocks, context: String(context.prefix(4000)))
             ExtLog.log("dịch \(blocks.count) block (\(Settings.model)) trong \(String(format: "%.1f", Date().timeIntervalSince(started)))s")
             return ["ok": true, "translations": translations]
 
         case "analyze":
-            // Apple Translation dịch từng câu, không nhận hồ sơ chapter.
-            if Settings.isOffline { return ["ok": true, "context": ""] }
             let blocks = try textBlocks(message)
+            // Apple Translation dịch từng câu, không nhận hồ sơ chapter — chỉ cần chốt ngôn ngữ của cả chapter.
+            if Settings.isOffline {
+                var reply: [String: Any] = ["ok": true, "context": ""]
+                if #available(iOS 26.4, *), let language = await OfflineTranslator.detectLanguage(blocks: blocks) {
+                    ExtLog.log("ngôn ngữ chapter: \(language)")
+                    reply["language"] = language
+                }
+                return reply
+            }
             let started = Date()
             let context = try await client().analyze(model: Settings.model, blocks: blocks)
             ExtLog.log("phân tích \(blocks.count) block → \(context.count) ký tự trong \(String(format: "%.1f", Date().timeIntervalSince(started)))s")
@@ -132,11 +139,11 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         return UIImage(data: data)
     }
 
-    private static func offlineTranslate(_ blocks: [[String: Any]]) async throws -> [[String: Any]] {
+    private static func offlineTranslate(_ blocks: [[String: Any]], language: String?) async throws -> [[String: Any]] {
         guard #available(iOS 26.4, *) else {
             throw MangalateError("Dịch offline cần iOS 26.4 trở lên.")
         }
-        return try await OfflineTranslator.translate(blocks: blocks)
+        return try await OfflineTranslator.translate(blocks: blocks, language: language)
     }
 
     private static func client() throws -> GeminiClient {

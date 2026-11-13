@@ -404,6 +404,7 @@
 
     // Lập hồ sơ nhân vật/giới tính/cách xưng hô cho cả chapter (chỉ text) để model dịch nhất quán.
     let context = "";
+    let language = "";
     try {
       setFab("Đang hiểu ngữ cảnh", true);
       const reply = await ask({
@@ -411,6 +412,7 @@
         payload: { action: "analyze", blocks: pending.map((block) => ({ id: block.id, text: block.text })) },
       });
       context = String(reply.context || "");
+      language = String(reply.language || "");
       log(`ngữ cảnh chapter: ${context.length} ký tự`);
     } catch (error) {
       log(`phân tích ngữ cảnh lỗi: ${error.message || error}`);
@@ -430,7 +432,7 @@
       if (!payload.length) return;
       const reply = await ask({
         type: "native",
-        payload: context ? { action: "translate", blocks: payload, context } : { action: "translate", blocks: payload },
+        payload: { action: "translate", blocks: payload, ...(context && { context }), ...(language && { language }) },
       });
       const byId = new Map((reply.translations || []).map((item) => [Number(item.id), String(item.text || "").trim()]));
       for (const block of batch) {

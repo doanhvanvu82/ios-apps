@@ -66,7 +66,12 @@
   const VERTICAL_MERGE_OVERLAP = 0.15;
 
   /** Hai dòng/khối chữ có cùng một bong bóng thoại không. */
-  function shouldMerge(a, b) {
+  // Cùng một đường bao bong bóng thì chịu được giãn dòng rộng hơn: font manhwa scanlation thường
+  // cách dòng ~0.5–0.9 chiều cao chữ, vượt mốc 0.45 dành cho dòng không có đường bao.
+  const LINE_GAP = 0.45;
+  const LINE_GAP_SAME_BUBBLE = 1;
+
+  function shouldMerge(a, b, sameBubble = false) {
     const horizontalOverlap = overlap1D(a.x, a.x + a.w, b.x, b.x + b.w);
     const verticalOverlap = overlap1D(a.y, a.y + a.h, b.y, b.y + b.h);
     const horizontalGap = gap1D(a.x, a.x + a.w, b.x, b.x + b.w);
@@ -87,7 +92,7 @@
     if (short > 0 && tall > short * 1.8) return false;
     // Hai dòng của cùng một đoạn chữ ngang: chồng theo trục x, cách nhau dưới nửa chiều cao dòng
     // (rộng hơn nữa là hai bong bóng riêng — gộp sẽ ra khung trắng phủ cả khoảng giữa).
-    return horizontalOverlap > 0.4 * minWidth && verticalGap < 0.45 * minHeight;
+    return horizontalOverlap > 0.4 * minWidth && verticalGap < (sameBubble ? LINE_GAP_SAME_BUBBLE : LINE_GAP) * minHeight;
   }
 
   function isVertical(group) {
@@ -449,6 +454,8 @@
    * DIỆN TÍCH lớn nhất nằm gọn trong đa giác, neo tâm ở tâm chữ gốc — đổi chiều cao lấy bề
    * rộng khi cần.
    */
+  const PAGE_ASPECT = 0.7;
+
   function fitTextAreaToPolygon(block) {
     const poly = block.poly;
     const area = block.textArea;
@@ -465,13 +472,18 @@
       (centerSpan.right - centerSpan.left) * 0.95,
       text.w * Math.max(widen, 2.2)
     );
-    const maxHalf = Math.min(0.3, Math.max(area.h, text.h * TEXT_AREA_MAX_TALLEN) / 2);
+    // Các mốc chiều cao tuyệt đối dưới đây chỉnh trên trang manga (rộng/cao ≈ 0.7). Ảnh webtoon cao gấp
+    // chục lần bề rộng: 3% chiều cao ảnh đã lớn hơn cả khối chữ, chỉ khung hẹp-cao lọt nên bản dịch
+    // thành cột một hai từ mỗi dòng. Quy các mốc về cùng tỉ lệ pixel với trang manga.
+    const size = block.pixelSize;
+    const unitY = size && size.w > 0 && size.h > 0 ? Math.min(1, (size.w / size.h) / PAGE_ASPECT) : 1;
+    const maxHalf = Math.min(0.3 * unitY, Math.max(area.h, text.h * TEXT_AREA_MAX_TALLEN) / 2);
     // Ưu tiên BỀ RỘNG: chữ càng rộng càng ít phải xuống dòng, cỡ chữ giữ được lớn. Chiều cao
     // chỉ cần đủ chỗ cho số dòng gốc; đổi thêm chiều cao lấy bề rộng là lỗi cũ. Bản dịch xuống dòng
     // lại nên khung rộng hơn chữ gốc cần ít chiều cao hơn: đòi đủ 100% chiều cao chữ gốc thì ở bong
     // bóng nghiêng chỉ khung hẹp lọt, bản dịch thành cột vài chữ mỗi dòng.
-    const minHeight = Math.min(maxHalf * 2, Math.max(text.h * 0.6, 0.03));
-    const step = 0.004;
+    const minHeight = Math.min(maxHalf * 2, Math.max(text.h * 0.6, 0.03 * unitY));
+    const step = 0.004 * unitY;
     const fits = (y, left, right) => {
       const span = polygonSpanAt(poly, y);
       return Boolean(span) && span.left <= left && span.right >= right;
@@ -747,6 +759,9 @@
       // Một chữ cái/chữ số đứng riêng: nét vẽ hay SFX bị OCR đọc thành chữ ("O", "C").
       else if (/^[A-Z0-9]$/.test(value)) result.add(block);
       // Một hai chữ khác hẳn hệ chữ của cả chapter (chữ Hán lẻ trong truyện tiếng Tây Ban Nha).
+      // Truyện chữ Latin không viết thoại thành cột dọc: cột dọc là watermark/SFX dọc mép tranh. Truyện
+      // chữ CJK thì không áp: cột kana bị OCR đọc nhầm thành chữ Latin vẫn là thoại thật.
+      else if (mainScript && mainScript[0] === "latin" && block.vertical === true && value.length >= 2 && scriptOf(value) === "latin") result.add(block);
       else if (mainScript && value.length <= 2 && scriptOf(value) && scriptOf(value) !== mainScript[0]) result.add(block);
       else if (medianSize && block.lineSize > medianSize * SFX_MIN_SCALE && !CHAPTER_TITLE.test(text)) result.add(block);
       else if (grams[index]) {
@@ -872,16 +887,25 @@
    * khoảng cách dòng mà `shouldMerge` dùng, chỉ đường bao mới tách được. Các cột chữ dọc của cùng
    * một bong bóng mỗi cột loang ra một vùng riêng nhưng các vùng đó luôn chồng lên nhau — không tách.
    */
+  function centerInside(box, bounds) {
+    const cx = box.x + box.w / 2;
+    const cy = box.y + box.h / 2;
+    return cx >= bounds.x && cx <= bounds.x + bounds.w && cy >= bounds.y && cy <= bounds.y + bounds.h;
+  }
+
+  /** Hai dòng loang ra cùng một bong bóng: vùng bao gần trùng nhau và chứa tâm của cả hai dòng. */
+  function inSameBubble(a, b) {
+    if (!a.poly || !b.poly) return false;
+    const boundsA = polygonBounds(a.poly);
+    const boundsB = polygonBounds(b.poly);
+    return containment(boundsA, boundsB) > 0.8 && centerInside(a.box, boundsB) && centerInside(b.box, boundsA);
+  }
+
   function inDifferentBubbles(a, b) {
     if (!a.poly || !b.poly) return false;
     const boundsA = polygonBounds(a.poly);
     const boundsB = polygonBounds(b.poly);
-    const inside = (box, bounds) => {
-      const cx = box.x + box.w / 2;
-      const cy = box.y + box.h / 2;
-      return cx >= bounds.x && cx <= bounds.x + bounds.w && cy >= bounds.y && cy <= bounds.y + bounds.h;
-    };
-    if (!inside(a.box, boundsA) || !inside(b.box, boundsB)) return false;
+    if (!centerInside(a.box, boundsA) || !centerInside(b.box, boundsB)) return false;
     return containment(boundsA, boundsB) < 0.05;
   }
 
@@ -933,7 +957,7 @@
     for (let i = 0; i < pixels.length; i++) {
       for (let j = i + 1; j < pixels.length; j++) {
         if (inDifferentBubbles(pixels[i], pixels[j])) continue;
-        if (shouldMerge(pixels[i].box, pixels[j].box)) union(i, j);
+        if (shouldMerge(pixels[i].box, pixels[j].box, inSameBubble(pixels[i], pixels[j]))) union(i, j);
       }
     }
 
@@ -1066,7 +1090,7 @@
   }
 
   // Cache bản dịch theo ảnh. Tăng CACHE_VERSION khi đổi prompt/định dạng để bỏ cache cũ.
-  const CACHE_VERSION = "v31";
+  const CACHE_VERSION = "v32";
 
   function cacheKey(model, url) {
     return `mangalate:${CACHE_VERSION}:${model || "default"}:${url}`;
