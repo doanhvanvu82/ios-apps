@@ -9,12 +9,12 @@
       "developerName": "vudv",
       "subtitle": "Bản build từ máy tính",
       "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
-      "iconURL": "https://raw.githubusercontent.com/doanhvanvu82/ios-apps/main/source/AdsBlocker.png",
+      "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker.png",
       "tintColor": "#738CFF",
       "version": "1.69",
       "versionDate": "2026-11-08",
       "versionDescription": "Build 69",
-      "downloadURL": "https://raw.githubusercontent.com/doanhvanvu82/ios-apps/main/source/AdsBlocker-1.69-69.ipa",
+      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.69-69.ipa",
       "size": 2027001,
       "versions": [
         {
@@ -22,7 +22,7 @@
           "buildVersion": "69",
           "date": "2026-11-08T16:54:56+00:00",
           "localizedDescription": "Build 69",
-          "downloadURL": "https://raw.githubusercontent.com/doanhvanvu82/ios-apps/main/source/AdsBlocker-1.69-69.ipa",
+          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/AdsBlocker-1.69-69.ipa",
           "size": 2027001
         }
       ],
@@ -37,12 +37,12 @@
       "developerName": "vudv",
       "subtitle": "Bản build từ máy tính",
       "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
-      "iconURL": "https://raw.githubusercontent.com/doanhvanvu82/ios-apps/main/source/GameHub.png",
+      "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub.png",
       "tintColor": "#738CFF",
       "version": "2.30",
       "versionDate": "2026-11-08",
       "versionDescription": "Build 130",
-      "downloadURL": "https://raw.githubusercontent.com/doanhvanvu82/ios-apps/main/source/GameHub-2.30-130.ipa",
+      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub-2.30-130.ipa",
       "size": 74762213,
       "versions": [
         {
@@ -50,7 +50,7 @@
           "buildVersion": "130",
           "date": "2026-11-08T16:54:56+00:00",
           "localizedDescription": "Build 130",
-          "downloadURL": "https://raw.githubusercontent.com/doanhvanvu82/ios-apps/main/source/GameHub-2.30-130.ipa",
+          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/GameHub-2.30-130.ipa",
           "size": 74762213
         }
       ],
@@ -93,12 +93,12 @@
       "developerName": "vudv",
       "subtitle": "Bản build từ máy tính",
       "localizedDescription": "Bản build mới nhất từ máy tính trong mạng nhà.",
-      "iconURL": "https://raw.githubusercontent.com/doanhvanvu82/ios-apps/main/source/MyDrive.png",
+      "iconURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/MyDrive.png",
       "tintColor": "#738CFF",
       "version": "2.04",
       "versionDate": "2026-11-08",
       "versionDescription": "Build 104",
-      "downloadURL": "https://raw.githubusercontent.com/doanhvanvu82/ios-apps/main/source/MyDrive-2.04-104.ipa",
+      "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/MyDrive-2.04-104.ipa",
       "size": 1140069,
       "versions": [
         {
@@ -106,7 +106,7 @@
           "buildVersion": "104",
           "date": "2026-11-08T16:54:56+00:00",
           "localizedDescription": "Build 104",
-          "downloadURL": "https://raw.githubusercontent.com/doanhvanvu82/ios-apps/main/source/MyDrive-2.04-104.ipa",
+          "downloadURL": "https://github.com/doanhvanvu82/ios-apps/releases/download/builds/MyDrive-2.04-104.ipa",
           "size": 1140069
         }
       ],

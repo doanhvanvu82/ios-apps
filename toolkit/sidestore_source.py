@@ -172,7 +172,14 @@ def collect_ipas():
                 found = sorted(glob.glob(os.path.join(entry, sub, "*.ipa")),
                                key=os.path.getmtime)
                 if found:
-                    ipas.append(found[-1])
+                    # Mod sinh nhiều IPA mỗi lần build (bản thường + _safe);
+                    # lấy tất cả IPA MỚI NHẤT trong cùng lượt (cách nhau < 1 giờ)
+                    # thay vì chỉ 1 file mới nhất — nếu không bản Safe sẽ che
+                    # mất bản thường vì nó được zip sau.
+                    latest = found[-1]
+                    newest = os.path.getmtime(latest)
+                    batch = [p for p in found if newest - os.path.getmtime(p) < 3600]
+                    ipas.extend(batch or [latest])
                     break
     return ipas
 
