@@ -74,6 +74,38 @@ browser.tabs.onRemoved.addListener((tabId) => {
   tabStore.remove(tabKey(tabId));
 });
 
+// Tab mới tạo gần đây, để đóng tab do tab-under mở mà trang không tự đóng được (link target=_blank, noopener).
+const RECENT_TAB_MS = 5000;
+const recentTabs = [];
+browser.tabs.onCreated.addListener((tab) => {
+  const now = Date.now();
+  recentTabs.push({ id: tab.id, windowId: tab.windowId, openerTabId: tab.openerTabId, time: now });
+  while (recentTabs.length && now - recentTabs[0].time > RECENT_TAB_MS) recentTabs.shift();
+});
+
+/**
+ * Tab-under bị chặn ở trang: đóng tab mới (nếu trang chưa tự đóng) và đưa tab gốc lên trước. Trang không biết URL
+ * của tab mới (mở about:blank rồi mới chuyển sang origin khác) → mở URL đó ngay tại tab gốc.
+ */
+async function takeBackTabUnder(tab, pageUrl, closed) {
+  let url = "";
+  if (!closed) {
+    // Safari có thể không điền openerTabId → nhận tab vừa tạo cùng cửa sổ.
+    const opened = recentTabs.filter((t) => t.id !== tab.id && Date.now() - t.time < RECENT_TAB_MS &&
+      (t.openerTabId === tab.id || (t.openerTabId == null && t.windowId === tab.windowId))).pop();
+    if (opened) {
+      if (!pageUrl) {
+        const info = await attempt(() => browser.tabs.get(opened.id), null);
+        const openedUrl = info && (info.pendingUrl || info.url);
+        if (/^https?:/i.test(openedUrl || "")) url = openedUrl;
+      }
+      recentTabs.splice(recentTabs.indexOf(opened), 1);
+      await attempt(() => browser.tabs.remove(opened.id));
+    }
+  }
+  await attempt(() => browser.tabs.update(tab.id, url ? { active: true, url } : { active: true }));
+}
+
 browser.runtime.onStartup?.addListener(async () => {
   const all = await browser.storage.local.get(null);
   await browser.storage.local.remove(Object.keys(all).filter((k) => k.startsWith("tab:")));
@@ -644,7 +676,7 @@ function buildCandidates(diag, ctx) {
     push({ kind: "hidden", selector: h.selector, count: h.count, media: h.media, sources: [{ type: h.source, ruleId: h.ruleId, origin: h.origin, label: SOURCE_LABEL[h.source] }], fixes });
   }
 
-  const popups = ctx.log.filter((l) => l.kind === "popup");
+  const popups = ctx.log.filter((l) => l.kind === "popup" || l.kind === "tabunder");
   if (popups.length && !ctx.site.allowPopups) {
     push({ kind: "popup_blocked", count: popups.length, samples: popups.slice(0, 3).map((l) => `${l.reason}: ${String(l.url).slice(0, 80)}`), sources: [{ type: "popup_guard", label: "chặn mở tab mới" }], fixes: [{ action: "allow_popups" }] });
   }
@@ -713,8 +745,14 @@ async function saveRules(host, rules) {
     };
     if (rule.type === "hide") {
       if (typeof rule.selector !== "string" || selectorProblem(rule.selector)) continue;
-      if ([...site.hide, ...global.hide].some((r) => r.selector === rule.selector)) continue;
+      const existing = [...site.hide, ...global.hide].find((r) => r.selector === rule.selector);
+      if (existing) {
+        // Chọn lại đúng khối đã ẩn để bật "mở khoá cuộn" cho rule cũ.
+        if (rule.unlockScroll === true) existing.unlockScroll = true;
+        continue;
+      }
       const hide = { ...base, selector: rule.selector, fallback: asStrings(rule.fallback, 3) };
+      if (rule.unlockScroll === true) hide.unlockScroll = true;
       if (rule.scope === "global" && !globalScopeProblem(rule.selector)) {
         global.hide.push(toGlobalHide(hide));
         continue;
@@ -819,6 +857,26 @@ async function removeException(host, kind, id) {
   await rebuildDynamicRules();
 }
 
+/** Bật/tắt mở khoá cuộn cho cả trang (hộp thoại bị bộ lọc ẩn sẵn nên không có rule riêng để gắn cờ). */
+async function setUnlockScroll(host, on) {
+  if (!host) throw new Error("Không xác định được trang.");
+  const state = await readRules(host);
+  if (on) state.site.unlockScroll = true;
+  else delete state.site.unlockScroll;
+  await writeRules(state);
+}
+
+/** "Chặn luôn" từ nhật ký chặn của tab: domain tab mới/tab-under → chặn tab mới + chuyển hướng tới nó ở mọi trang. */
+async function blockPopupDomain(host, rawDomain) {
+  const domain = normalizeDomain(rawDomain);
+  if (!host) throw new Error("Không xác định được trang.");
+  if (!domain) throw new Error("Domain không hợp lệ.");
+  if (isSameSite(domain, host)) throw new Error("Không chặn domain của chính trang.");
+  if (isProtectedDomain(domain)) throw new Error(`${domain} là dịch vụ dùng chung, chặn sẽ hỏng nhiều trang.`);
+  await saveRules(host, [{ type: "block_popup_domain", domain, reason: "Từ nhật ký chặn", source: "manual" }]);
+  return domain;
+}
+
 /** Cho phép (on) / chặn lại widget mạng xã hội trên trang `host` (lưu ở site gốc, áp cả tên miền dùng chung). */
 async function setWidgetAllowed(host, provider, on) {
   if (!WIDGET_DOMAINS[provider]) throw new Error(`Widget không hợp lệ: ${provider}`);
@@ -910,6 +968,9 @@ async function handle(message, sender) {
       await setBadge(tabId, state);
       return null;
     }
+    case "tabUnder":
+      if (!sender.tab) return null;
+      return takeBackTabUnder(sender.tab, String(message.url || ""), message.closed === true);
     case "getTabState": return getTabState(message.tabId, message.url);
     case "scan": return startScan(message.tabId);
     case "dismissScan":
@@ -941,6 +1002,8 @@ async function handle(message, sender) {
     case "diagnostics": return collectDiagnosis(message.tabId, message.url);
     case "diagnoseAI": return diagnoseWithAI(message.tabId, message.url, message.problem);
     case "removeException": return removeException(hostOf(message.url || ""), message.kind, message.id);
+    case "setUnlockScroll": return setUnlockScroll(hostOf(message.url || ""), message.on === true);
+    case "blockPopupDomain": return blockPopupDomain(hostOf(message.url || ""), message.domain);
     case "allowWidget": return setWidgetAllowed(hostOf(message.url || (sender.tab && sender.tab.url) || ""), message.provider, true);
     case "disallowWidget": return setWidgetAllowed(message.host, message.provider, false);
     case "privacyReport": return privacyReport(message.tabId, message.url);

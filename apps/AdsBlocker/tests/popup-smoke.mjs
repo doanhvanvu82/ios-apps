@@ -17,7 +17,7 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
 // Background giả: trạng thái AI chỉnh được từ test qua window.__bg.
 const BROWSER_STUB = `
   window.__bg = {
-    hasKey: false, model: "", listModels: "ok", scan: null, calls: [], nativeError: null, reloaded: false, tabId: 1,
+    hasKey: false, model: "", listModels: "ok", scan: null, calls: [], nativeError: null, reloaded: false, tabId: 1, log: [],
     siteRules: { hide: [], popupDomains: [], blockDomains: [] },
     globalRules: { hide: [], popupDomains: [] },
     sharing: { linkedTo: null, linkedFrom: [], suggestions: [], knownSites: [] },
@@ -49,7 +49,7 @@ const BROWSER_STUB = `
             if (m.tabId !== bg.tabId) return { ok: false, error: "Invalid call to tabs.get(). Tab not found." };
             return reply({
             host: "news.example.com", site: "example.com", sensitive: false,
-            stats: { popups: 3, overlays: 1 }, log: [], scan: bg.scan,
+            stats: { popups: 3, overlays: 1 }, log: bg.log, scan: bg.scan,
             siteRules: bg.siteRules, globalRules: bg.globalRules, sharing: bg.sharing,
             features: bg.features, enabledRulesets: bg.enabledRulesets, nativeParamStrip: bg.nativeParamStrip,
             settings: { hasKey: bg.hasKey, model: bg.model, nativeError: bg.nativeError,
@@ -91,6 +91,8 @@ const BROWSER_STUB = `
             bg.siteRules.allowDomains = [{ id: "e1", domain: m.fix.domain, reason: m.fix.reason }];
             return reply(null);
           case "removeException": bg.removed = m.kind; bg.siteRules.allowDomains = []; return reply(null);
+          case "blockPopupDomain": bg.globalRules.popupDomains.push({ id: "p1", domain: m.domain }); return reply(m.domain);
+          case "setUnlockScroll": bg.siteRules.unlockScroll = m.on || undefined; return reply(null);
           case "deleteRule":
             bg.siteRules.hide = bg.siteRules.hide.filter((r) => r.id !== m.ruleId);
             bg.globalRules.hide = bg.globalRules.hide.filter((r) => r.id !== m.ruleId);
@@ -376,6 +378,29 @@ try {
     await waitFor(`window.__bg.cleared === "global"`);
     await waitFor(`document.getElementById("clear-global").hidden`);
     assert.equal(await page(`window.__bg.siteRules.hide.length`), 2, "nhóm còn lại không được bị xoá");
+  });
+
+  await check("nhật ký: tab-under/tab mới có nút Chặn luôn domain (trừ chính trang); chặn xong thì nút biến mất", async () => {
+    await page(`window.__bg.log = [
+      { kind: "tabunder", url: "https://go.adnet.io/landing?id=1", reason: "đổi tab cũ sang trang khác ngay sau khi mở tab mới" },
+      { kind: "popup", url: "https://m.example.com/x", reason: "không do người dùng bấm" },
+      { kind: "overlay", url: "", reason: "lớp phủ trong suốt" },
+    ]; refresh()`);
+    await waitFor(`document.querySelectorAll("#log li").length === 3`);
+    assert.deepEqual(await page(`[...document.querySelectorAll("#log .tag")].map((t) => t.textContent)`), ["Tab-under", "Popup", "Lớp phủ"]);
+    assert.deepEqual(await page(`[...document.querySelectorAll("#log button")].map((b) => b.textContent)`), ["Chặn luôn go.adnet.io"]);
+    await page(`document.querySelector("#log button").click()`);
+    await waitFor(`!document.querySelector("#log button")`);
+    assert.deepEqual(await page(`window.__bg.globalRules.popupDomains.map((r) => r.domain)`), ["go.adnet.io"]);
+  });
+
+  await check("Mở khoá cuộn trang này: bật → nút đổi thành Tắt; bấm lại tắt", async () => {
+    await page(`document.getElementById("unlock-scroll").click()`);
+    await waitFor(`window.__bg.siteRules.unlockScroll === true`);
+    await waitFor(`document.getElementById("unlock-scroll").textContent === "Tắt mở khoá cuộn trang này"`);
+    await page(`document.getElementById("unlock-scroll").click()`);
+    await waitFor(`document.getElementById("unlock-scroll").textContent === "Mở khoá cuộn trang này"`);
+    assert.equal(await page(`window.__bg.siteRules.unlockScroll`), undefined);
   });
 
   if (SHOT) {

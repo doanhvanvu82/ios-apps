@@ -13,6 +13,8 @@
   const HOST = location.hostname;
   const OWN_ATTR = "data-adsblocker";
   const HIDDEN_ATTR = "data-adsblocker-hidden";
+  const BACKDROP_ATTR = "data-adsblocker-backdrop";
+  const BACKDROP_MIN_RATIO = 0.9;
   const MAX_CANDIDATES = 40;
   const MAX_SCAN_ELEMENTS = 6000;
   const OVERLAY_SWEEP_MS = 30000;
@@ -55,6 +57,8 @@
   }
 
   const allHideRules = () => [...globalRules.hide, ...siteRules.hide];
+  // Bật cho trang (popup) hoặc do rule "Ẩn + mở khoá cuộn" (xoá rule là thôi mở khoá).
+  const scrollUnlocked = () => features.ads && (!!siteRules.unlockScroll || allHideRules().some((r) => r.unlockScroll));
 
   function applyConfig() {
     document.dispatchEvent(new CustomEvent("adsblocker:config", {
@@ -63,6 +67,7 @@
         allowPopups: !!siteRules.allowPopups,
         tracking: features.tracking,
         youtube: features.youtube,
+        unlockScroll: scrollUnlocked(),
         popupDomains: [...globalRules.popupDomains, ...siteRules.popupDomains].map((r) => r.domain),
       }),
     }));
@@ -73,7 +78,7 @@
     // Ngoại lệ "bỏ ẩn selector trên trang này" (từ chẩn đoán) gỡ selector khỏi mọi nguồn.
     const unhidden = new Set((siteRules.unhide || []).map((r) => r.selector));
     const selectors = features.ads ? [
-      ...GENERIC_HIDE, `[${HIDDEN_ATTR}]`, ...listSelectors,
+      ...GENERIC_HIDE, `[${HIDDEN_ATTR}]`, ...(scrollUnlocked() ? [`[${BACKDROP_ATTR}]`] : []), ...listSelectors,
       ...allHideRules().flatMap((r) => [r.selector, ...(r.fallback || [])]),
     ].filter((s) => !unhidden.has(s)) : [];
     // Khối đã ẩn theo đường dẫn cấu trúc mang thuộc tính riêng → gỡ khi selector đó được bỏ ẩn.
@@ -86,6 +91,7 @@
     styleEl.textContent = selectors.map((s) => `${s} { display: none !important; }`).join("\n");
     if (!styleEl.isConnected) (document.head || document.documentElement).appendChild(styleEl);
     applyStructural();
+    unlockScroll();
   }
 
   function queryAll(selector) {
@@ -108,7 +114,8 @@
       const nodes = queryAll(rule.structural);
       if (nodes.length !== 1 || nodes[0].hasAttribute(HIDDEN_ATTR)) continue;
       const r = nodes[0].getBoundingClientRect();
-      if ((r.width * r.height) / pageArea() <= MAX_AREA_RATIO) nodes[0].setAttribute(HIDDEN_ATTR, "");
+      // Hộp thoại phủ cả màn hình (rule mở khoá cuộn) lớn hơn giới hạn diện tích của khối quảng cáo thường.
+      if (rule.unlockScroll || (r.width * r.height) / pageArea() <= MAX_AREA_RATIO) nodes[0].setAttribute(HIDDEN_ATTR, "");
     }
   }
 
@@ -121,6 +128,97 @@
     }, 500);
   }
 
+  // ---------------------------------------------------------------- mở khoá cuộn
+
+  /** Trang đang khoá cuộn kiểu hộp thoại: overflow ẩn ở html/body hoặc body bị ghim (position: fixed). */
+  function isScrollLocked() {
+    const roots = [document.documentElement, document.body].filter(Boolean).map((el) => getComputedStyle(el));
+    return roots.some((s) => /hidden|clip/.test(s.overflowY) || s.touchAction === "none") ||
+      (roots.length > 1 && roots[1].position === "fixed");
+  }
+
+  /**
+   * Hộp thoại "tắt chặn quảng cáo" khoá cuộn trang; ẩn hộp thoại không gỡ khoá. Ép lại bằng style inline !important
+   * (thắng cả class kiểu body.modal-open), chỉ đụng thuộc tính đang khoá. Trang khoá lại → observer gọi lại hàm này.
+   */
+  function unlockScroll() {
+    if (!scrollUnlocked()) return;
+    for (const el of [document.documentElement, document.body]) {
+      if (!el) continue;
+      watchRoot(el);
+      const style = getComputedStyle(el);
+      if (/hidden|clip/.test(style.overflowY)) el.style.setProperty("overflow-y", "auto", "important");
+      if (style.touchAction === "none") el.style.setProperty("touch-action", "auto", "important");
+    }
+    const body = document.body;
+    if (body && getComputedStyle(body).position === "fixed") {
+      // Kiểu khoá của iOS: body ghim với top = -vị trí cuộn → trả lại đúng chỗ đang đọc.
+      const top = parseFloat(getComputedStyle(body).top) || 0;
+      body.style.setProperty("position", "static", "important");
+      body.style.setProperty("top", "auto", "important");
+      window.scrollTo(0, -top);
+    }
+    hideBackdrops();
+  }
+
+  /** Lớp nền mờ của hộp thoại: phần tử ghim (fixed) phủ gần kín màn hình, không chữ/ảnh. Đã gắn cờ thì vẫn tính (đang bị ẩn). */
+  function isBackdrop(el) {
+    if (el.hasAttribute(BACKDROP_ATTR)) return true;
+    const style = getComputedStyle(el);
+    if (style.position !== "fixed" || style.display === "none") return false;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const r = el.getBoundingClientRect();
+    const covers = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0)) * Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0)) / (vw * vh);
+    return covers >= BACKDROP_MIN_RATIO && !el.innerText.trim() && !el.querySelector("img,video,iframe,canvas,input");
+  }
+
+  /**
+   * Dự phòng khi rule chưa có selector lớp nền (bảng chọn lưu sẵn để CSS ẩn ngay): lớp nền là phần tử riêng ngoài
+   * hộp thoại, còn lại thì vẫn che trang và nuốt cú chạm.
+   */
+  function hideBackdrops() {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    for (const [fx, fy] of [[0.5, 0.5], [0.15, 0.15], [0.85, 0.85]]) {
+      for (let el = document.elementFromPoint(vw * fx, vh * fy); el && el !== document.body && el !== document.documentElement;
+        el = el.parentElement) {
+        if (el.hasAttribute(OWN_ATTR)) break;
+        if (getComputedStyle(el).position !== "fixed") continue;
+        if (isBackdrop(el)) el.setAttribute(BACKDROP_ATTR, "");
+        break;
+      }
+    }
+  }
+
+  const watchedRoots = new WeakSet();
+  const rootObserver = new MutationObserver(() => unlockSoon());
+  function watchRoot(el) {
+    if (watchedRoots.has(el)) return;
+    watchedRoots.add(el);
+    rootObserver.observe(el, { attributes: true, attributeFilter: ["style", "class"] });
+  }
+
+  // Gỡ khoá ngay trong callback observer (chạy trước khi trình duyệt vẽ) → lớp nền/khoá cuộn không kịp hiện ra
+  // thành một lần nháy. Trang giành lại khoá liên tục (observer của trang khoá lại ngay khi mình gỡ) thì vòng
+  // microtask không bao giờ nhường → sau vài lần trong cùng một task chuyển sang hẹn giờ, tránh treo trang.
+  const MAX_SYNC_UNLOCKS = 5;
+  const UNLOCK_RETRY_MS = 100;
+  let syncUnlocks = 0;
+  let unlockTimer = 0;
+  function unlockSoon() {
+    if (!scrollUnlocked()) return;
+    if (syncUnlocks < MAX_SYNC_UNLOCKS) {
+      if (syncUnlocks++ === 0) setTimeout(() => { syncUnlocks = 0; }, 0);
+      unlockScroll();
+    } else if (!unlockTimer) {
+      unlockTimer = setTimeout(() => {
+        unlockTimer = 0;
+        unlockScroll();
+      }, UNLOCK_RETRY_MS);
+    }
+  }
+
   browser.storage.onChanged.addListener((changes, area) => {
     if (area !== "local" || !(changes[siteStorageKey] || changes.global || changes.aliases || changes.features)) return;
     loadConfig();
@@ -131,6 +229,7 @@
     if (styleEl && !styleEl.isConnected) applyStyle();
     scheduleOverlaySweep();
     scheduleStructural();
+    unlockSoon();
     if (cosmeticStarted) {
       for (const record of records) record.addedNodes.forEach((node) => queueTokens(collectTokens(node)));
     }
@@ -207,6 +306,19 @@
     } catch {
       // detail không phải JSON → event giả từ trang.
     }
+  });
+
+  // Tab-under vừa bị chặn: background đóng tab mới mà trang không tự đóng được, đưa tab này lên trước.
+  document.addEventListener("adsblocker:tabunder", (event) => {
+    if (window !== window.top) return;
+    (async () => {
+      try {
+        const { url, closed } = JSON.parse(event.detail);
+        await browser.runtime.sendMessage({ type: "tabUnder", url: String(url || ""), closed: closed === true });
+      } catch {
+        // detail giả từ trang hoặc extension đang nạp lại: tab mới chỉ không bị đóng.
+      }
+    })();
   });
 
   // ---------------------------------------------------------------- đặc trưng phần tử
@@ -653,7 +765,8 @@
 
   // Dùng chung cho content/picker.js (cùng isolated world, nạp sau file này).
   globalThis.AdsBlockerContent = {
-    OWN_ATTR, HOST, IS_TOP, hostOf, stableSelector, structuralPath, strippedHtml, resourceDomains, measureFor,
+    OWN_ATTR, HOST, IS_TOP, hostOf, stableSelector, structuralPath, strippedHtml, resourceDomains, measureFor, isScrollLocked,
+    isBackdrop,
   };
 
   // ---------------------------------------------------------------- khởi động
@@ -664,5 +777,8 @@
     sweepOverlays();
     if (cosmeticStarted) queueTokens(collectTokens(document.documentElement));
   });
-  window.addEventListener("load", sweepOverlays);
+  window.addEventListener("load", () => {
+    sweepOverlays();
+    unlockScroll();
+  });
 })();

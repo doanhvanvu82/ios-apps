@@ -45,6 +45,8 @@ function loadBackground({ nativeReplies = [], tabGone = false, rejectRedirect = 
   const dnrCalls = [];
   const listeners = [];
   const nativeCalls = [];
+  const tabCreated = [];
+  const tabCalls = [];
   const clone = (v) => structuredClone(v);
   const browser = {
     storage: {
@@ -85,6 +87,9 @@ function loadBackground({ nativeReplies = [], tabGone = false, rejectRedirect = 
         : message.type === "thirdParties" ? clone(thirdParties)
         : message.type === "diagnostics" ? clone(DIAG) : undefined),
       onRemoved: { addListener() {} },
+      onCreated: { addListener: (l) => tabCreated.push(l) },
+      remove: async (id) => { tabCalls.push(["remove", id]); },
+      update: async (id, props) => { tabCalls.push(["update", id, props]); },
     },
     scripting: {
       executeScript: async ({ target, files }) => { injected.push({ target, files }); pageAlive = true; },
@@ -117,8 +122,28 @@ function loadBackground({ nativeReplies = [], tabGone = false, rejectRedirect = 
   // Rule người dùng (bỏ rule xoá tham số theo dõi): [hành động, domain, điều kiện phụ].
   const userRules = () => dnr.filter((r) => r.action.type !== "redirect")
     .map((r) => [r.action.type, r.condition.requestDomains.join(","), r.condition.domainType || (r.condition.resourceTypes || []).join() || (r.condition.initiatorDomains || []).join()]);
-  return { store, dnr: () => dnr, userRules, rulesets: () => [...enabledRulesets].sort(), send, nativeCalls, context, dnrCalls, injected };
+  const createTab = (tab) => tabCreated.forEach((l) => l(tab));
+  return { store, dnr: () => dnr, userRules, rulesets: () => [...enabledRulesets].sort(), send, nativeCalls, context, dnrCalls, injected, createTab, tabCalls };
 }
+
+test("tabUnder: đóng tab mới do tab này mở, đưa tab gốc lên trước; trang không biết URL → mở URL đó tại tab gốc", async () => {
+  const bg = loadBackground();
+  bg.createTab({ id: 7, windowId: 2, openerTabId: 9 });
+  bg.createTab({ id: 5, windowId: 1, openerTabId: 1 });
+  await bg.send({ type: "tabUnder", url: "", closed: false });
+  assert.deepEqual(JSON.parse(JSON.stringify(bg.tabCalls)), [["remove", 5], ["update", 1, { active: true, url: PAGE }]]);
+
+  // Trang đã tự đóng tab và tự mở URL: chỉ đưa tab gốc lên trước.
+  bg.tabCalls.length = 0;
+  bg.createTab({ id: 6, windowId: 1 });
+  await bg.send({ type: "tabUnder", url: "https://news.test/real", closed: true });
+  assert.deepEqual(JSON.parse(JSON.stringify(bg.tabCalls)), [["update", 1, { active: true }]]);
+
+  // Safari không điền openerTabId: nhận tab vừa tạo cùng cửa sổ.
+  bg.tabCalls.length = 0;
+  await bg.send({ type: "tabUnder", url: "https://news.test/real", closed: false });
+  assert.deepEqual(JSON.parse(JSON.stringify(bg.tabCalls)), [["remove", 6], ["update", 1, { active: true }]]);
+});
 
 test("savePicked: lưu theo phạm vi; 'Mọi trang' chỉ khi selector đủ điều kiện, bỏ đường dẫn cấu trúc", async () => {
   const bg = loadBackground();
@@ -481,4 +506,36 @@ test("xoá toàn bộ theo nhóm: trang này / mọi trang; giữ ngoại lệ; 
   assert.equal(await bg.send({ type: "deleteAllRules", host: "www.truyenqqto.com", scope: "global" }), 2);
   assert.deepEqual([bg.store.global.hide, bg.store.global.popupDomains, bg.userRules()], [[], [], []]);
   await assert.rejects(bg.send({ type: "deleteAllRules", host: "www.truyenqqto.com", scope: "all" }), /không hợp lệ/);
+});
+
+test("mở khoá cuộn: rule tự chọn mang cờ; chọn lại khối đã ẩn thì bật cờ cho rule cũ; công tắc theo trang", async () => {
+  const bg = loadBackground();
+  await bg.send({ type: "savePicked", rules: [{ type: "hide", selector: "div.adblock-modal", unlockScroll: true }, { type: "hide", selector: "div.w-x" }] });
+  await bg.send({ type: "savePicked", rules: [{ type: "hide", selector: "div.w-x", unlockScroll: true }] });
+  const site = bg.store["site:truyenqqto.com"];
+  assert.deepEqual(site.hide.map((r) => [r.selector, r.unlockScroll]), [["div.adblock-modal", true], ["div.w-x", true]]);
+
+  await bg.send({ type: "setUnlockScroll", url: PAGE, on: true });
+  assert.equal(bg.store["site:truyenqqto.com"].unlockScroll, true);
+  await bg.send({ type: "setUnlockScroll", url: PAGE, on: false });
+  assert.equal(bg.store["site:truyenqqto.com"].unlockScroll, undefined);
+  await assert.rejects(bg.send({ type: "setUnlockScroll", url: "about:blank", on: true }), /Không xác định/);
+});
+
+test("chặn luôn domain từ nhật ký (tab-under/tab mới): lưu chặn tab mới mọi trang; từ chối chính trang/CDN dùng chung", async () => {
+  const bg = loadBackground();
+  assert.equal(await bg.send({ type: "blockPopupDomain", url: PAGE, domain: "https://go.adnet.io/click?id=1" }), "go.adnet.io");
+  assert.deepEqual(bg.store.global.popupDomains.map((r) => [r.domain, r.source]), [["go.adnet.io", "manual"]]);
+  assert.deepEqual(bg.userRules(), [["block", "go.adnet.io", "main_frame,sub_frame"]]);
+  await assert.rejects(bg.send({ type: "blockPopupDomain", url: PAGE, domain: "m.truyenqqto.com" }), /chính trang/);
+  await assert.rejects(bg.send({ type: "blockPopupDomain", url: PAGE, domain: "www.google.com" }), /dùng chung/);
+  await assert.rejects(bg.send({ type: "blockPopupDomain", url: PAGE, domain: "" }), /không hợp lệ/);
+});
+
+test("chẩn đoán: tab-under bị chặn cũng tính vào 'Tab mới bị chặn' (cách sửa: cho trang mở tab mới)", async () => {
+  const bg = loadBackground();
+  bg.store["tab:1"] = { popups: 1, overlays: 0, log: [{ kind: "tabunder", url: "https://go.adnet.io/x", reason: "đổi tab cũ" }], scan: null };
+  const { candidates } = await bg.send({ type: "diagnostics", tabId: 1, url: PAGE });
+  const popup = candidates.find((c) => c.kind === "popup_blocked");
+  assert.deepEqual([popup.count, popup.fixes.map((f) => f.action)], [1, ["allow_popups"]]);
 });

@@ -1,7 +1,7 @@
 ﻿"use strict";
 
 const $ = (id) => document.getElementById(id);
-const { globalScopeProblem } = globalThis.AdsBlockerRules;
+const { globalScopeProblem, normalizeDomain, isSameSite, isProtectedDomain, matchesDomain } = globalThis.AdsBlockerRules;
 const POLL_MS = 1000;
 const PRECHECK_CONFIDENCE = 0.7;
 const TOAST_OK_MS = 3000;
@@ -132,9 +132,19 @@ function render() {
 
   $("log").replaceChildren(...(log.length ? log : [null]).map((entry) => entry
     ? el("li", {}, el("div", {},
-      el("span", { className: "tag", textContent: entry.kind === "overlay" ? "Lớp phủ" : "Popup" }),
-      `${entry.reason} — `, el("code", { textContent: entry.url || "(không có URL)" })))
+      el("span", { className: "tag", textContent: LOG_LABEL[entry.kind] || entry.kind }),
+      `${entry.reason} — `, el("code", { textContent: entry.url || "(không có URL)" })),
+    blockLogButton(host, entry))
     : el("li", { textContent: "Chưa chặn gì trên tab này." })));
+
+  const unlocked = !!siteRules.unlockScroll;
+  if (!$("unlock-scroll").dataset.running) {
+    $("unlock-scroll").disabled = !host || !state.features.ads;
+    $("unlock-scroll").textContent = unlocked ? "Tắt mở khoá cuộn trang này" : "Mở khoá cuộn trang này";
+  }
+  $("unlock-status").textContent = unlocked
+    ? "Đang mở khoá cuộn trên trang này (gỡ overflow:hidden, body bị ghim, lớp nền mờ)."
+    : "Dùng khi đã ẩn hộp thoại bắt tắt chặn quảng cáo mà trang không cuộn được.";
 
   renderScan(host, scan, settings, sensitive);
   renderRules(host, siteRules, globalRules);
@@ -146,6 +156,31 @@ function render() {
   renderSettings(settings);
   $("reload-banner").hidden = !settings.nativeError;
 }
+
+const LOG_LABEL = { overlay: "Lớp phủ", popup: "Popup", tabunder: "Tab-under" };
+
+/** Nút "Chặn luôn" cho domain trong nhật ký tab mới/tab-under (chưa chặn, không phải chính trang/CDN dùng chung). */
+function blockLogButton(host, entry) {
+  if (!host || (entry.kind !== "popup" && entry.kind !== "tabunder")) return null;
+  const domain = normalizeDomain(entry.url || "");
+  if (!domain || isSameSite(domain, host) || isProtectedDomain(domain)) return null;
+  const blocked = [...state.globalRules.popupDomains, ...state.siteRules.popupDomains].some((r) => matchesDomain(domain, r.domain));
+  if (blocked) return null;
+  return el("div", { className: "actions" }, smallButton(`Chặn luôn ${domain}`, "Đang chặn…", async () => {
+    const tab = await currentTab();
+    await call("blockPopupDomain", { url: tab.url, domain });
+    await refresh();
+    return `Đã chặn tab mới/chuyển hướng tới ${domain} ở mọi trang.`;
+  }));
+}
+
+action($("unlock-scroll"), { busy: "Đang lưu…" }, async () => {
+  const on = !state.siteRules.unlockScroll;
+  const tab = await currentTab();
+  await call("setUnlockScroll", { url: tab.url, on });
+  await refresh();
+  return on ? "Đã mở khoá cuộn trên trang này." : "Đã tắt mở khoá cuộn. Tải lại trang để thấy thay đổi.";
+});
 
 /** Lý do chưa dùng được AI; `needsAds`: thao tác về quảng cáo (quét theo dõi thì không cần bật Chặn quảng cáo). */
 function aiBlocker(host, settings, sensitive, { needsAds = true } = {}) {
@@ -240,6 +275,7 @@ function ruleItem(host, rule, scope) {
       el("span", { className: "tag", textContent: TYPE_LABEL[rule.type] }),
       el("span", { className: "tag", textContent: rule.source === "manual" ? "Tự chọn" : "AI" }),
       rule.type === "block_domain" ? el("span", { className: "tag scope", textContent: "Mọi trang" }) : null,
+      rule.unlockScroll ? el("span", { className: "tag", textContent: "Mở khoá cuộn" }) : null,
       el("code", { textContent: ruleText(rule) }),
       el("div", { className: "note", textContent: rule.reason })),
     el("div", { className: "actions" }, ...actions));

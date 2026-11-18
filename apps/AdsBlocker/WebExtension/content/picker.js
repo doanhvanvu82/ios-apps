@@ -11,6 +11,9 @@
   const MAX_MATCHES = 50;
   const PRECHECK_CONFIDENCE = 0.7;
   const MAX_FALLBACKS = 2;
+  // Khối phủ từ nửa màn hình trở lên và được ghim (fixed) = hộp thoại/lớp phủ, không phải khối quảng cáo thường.
+  const OVERLAY_MIN_RATIO = 0.5;
+  const MAX_BACKDROP_MATCHES = 3;
   const TOAST_MS = 3500;
   const BUSY_LABEL = { hide: "Đang lưu…", ai: "Đang hỏi Gemini…", save: "Đang lưu…" };
   const SWALLOWED = ["pointerdown", "pointerup", "mousedown", "mouseup", "touchstart", "touchend",
@@ -71,6 +74,8 @@
       <code class="sel"></code>
       <label><input type="checkbox" class="scope-global">
         <span>Áp dụng cho mọi trang <span class="muted scope-note"></span></span></label>
+      <label><input type="checkbox" class="unlock">
+        <span>Mở khoá cuộn trang (hộp thoại bắt tắt chặn quảng cáo) <span class="muted unlock-note"></span></span></label>
       <div class="row">
         <button data-act="grow">▲ Rộng hơn</button>
         <button data-act="shrink">▼ Hẹp hơn</button>
@@ -155,9 +160,25 @@
 
   const current = () => chain[level];
 
+  function isScreenOverlay(el) {
+    const r = el.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const visible = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0)) * Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+    if (visible / (vw * vh) < OVERLAY_MIN_RATIO) return false;
+    for (let n = el; n && n !== document.body; n = n.parentElement) {
+      if (getComputedStyle(n).position === "fixed") return true;
+    }
+    return false;
+  }
+
   function select() {
     const el = current();
-    basic = buildBasicRule(el);
+    const overlay = isScreenOverlay(el);
+    basic = buildBasicRule(el, overlay);
+    const locked = C.isScrollLocked();
+    ui.$(".unlock").checked = overlay || locked;
+    ui.$(".unlock-note").textContent = locked ? "— trang đang bị khoá cuộn" : overlay ? "— khối này phủ cả màn hình" : "";
     const r = el.getBoundingClientRect();
     ui.$(".what").textContent = `<${el.tagName.toLowerCase()}> ${Math.round(r.width)}×${Math.round(r.height)}`;
     ui.$(".count").textContent = `· sẽ ẩn ${basic.count} khối trên trang`;
@@ -188,14 +209,15 @@
 
   // ---------------------------------------------------------------- rule cơ bản
 
-  function okSelector(selector, el) {
+  /** `overlay`: hộp thoại phủ màn hình — được vượt giới hạn diện tích của khối quảng cáo thường. */
+  function okSelector(selector, el, overlay) {
     if (selectorProblem(selector)) return null;
     const m = C.measureFor(selector, el);
-    return m.valid && m.includesCandidate && m.count <= MAX_MATCHES && m.areaRatio <= MAX_AREA_RATIO ? m : null;
+    return m.valid && m.includesCandidate && m.count <= MAX_MATCHES && (overlay || m.areaRatio <= MAX_AREA_RATIO) ? m : null;
   }
 
   /** Selector chính (có nghĩa, bền khi nội dung quảng cáo đổi) + dự phòng + đường dẫn cấu trúc. */
-  function buildBasicRule(el) {
+  function buildBasicRule(el, overlay) {
     const tag = el.tagName.toLowerCase();
     const options = [];
     if (el.id && !isRandomToken(el.id) && !/^\d/.test(el.id)) options.push("#" + CSS.escape(el.id));
@@ -210,7 +232,7 @@
     if (classes.length) options.push(tag + classes.slice(0, 3).map((c) => "." + CSS.escape(c)).join(""));
     options.push(C.stableSelector(el));
 
-    const good = [...new Set(options)].filter((s) => okSelector(s, el));
+    const good = [...new Set(options)].filter((s) => okSelector(s, el, overlay));
     const selector = good[0] || C.stableSelector(el);
     const structural = C.structuralPath(el);
     return {
@@ -370,6 +392,30 @@
   // ---------------------------------------------------------------- lưu
 
   const basicScope = () => (ui.$(".scope-global").checked ? "global" : "site");
+  const unlockChecked = () => ui.$(".unlock").checked;
+
+  /**
+   * Selector lớp nền mờ của hộp thoại (phần tử anh em của khối đã chọn hoặc của tổ tiên nó): lưu vào rule để CSS ẩn
+   * ngay khi trang chèn lớp nền vào — chỉ dò bằng JS lúc chạy thì lớp nền kịp hiện một khung hình (màn hình nháy tối).
+   * Bỏ selector theo vị trí (:nth-of-type): bố cục đổi là trúng nhầm phần tử khác.
+   */
+  function backdropSelectors(el) {
+    for (let node = el; node && node !== document.body && node.parentElement; node = node.parentElement) {
+      for (const sibling of node.parentElement.children) {
+        if (sibling === node || sibling.hasAttribute(C.OWN_ATTR) || !C.isBackdrop(sibling)) continue;
+        const selector = C.stableSelector(sibling);
+        if (/:nth-/.test(selector) || selectorProblem(selector)) continue;
+        const m = C.measureFor(selector, sibling);
+        if (m.valid && m.includesCandidate && m.count <= MAX_BACKDROP_MATCHES) return [selector];
+      }
+    }
+    return [];
+  }
+
+  /** Rule cơ bản theo ô "Mở khoá cuộn": bật thì kèm cờ + selector lớp nền (đứng đầu fallback để không bị cắt khi lưu). */
+  const withUnlock = (rule) => (unlockChecked()
+    ? { ...rule, unlockScroll: true, fallback: [...backdropSelectors(current()), ...(rule.fallback || [])] }
+    : rule);
 
   /** Nhãn phạm vi của rule ẩn; chạm để đổi Trang này ↔ Mọi trang (nếu selector đủ điều kiện). */
   function scopeTag(rule) {
@@ -398,7 +444,7 @@
   const forStorage = (rule, source) => rule.type === "hide"
     ? {
       type: "hide", selector: rule.selector, fallback: rule.fallback, structural: rule.structural,
-      scope: rule.scope === "global" ? "global" : "site", reason: rule.reason, source,
+      scope: rule.scope === "global" ? "global" : "site", reason: rule.reason, source, unlockScroll: rule.unlockScroll === true,
     }
     : { type: rule.type, domain: rule.domain, reason: rule.reason, source };
 
@@ -408,7 +454,8 @@
     stop();
     const hidden = rules.filter((r) => r.type === "hide").length;
     const domains = rules.length - hidden;
-    pageToast(`✓ Đã ẩn ${hidden} rule${domains ? ` · chặn ${domains} domain` : ""}. Xem/xoá trong popup › Rule đã lưu.`);
+    const unlocked = rules.some((r) => r.unlockScroll) ? " · mở khoá cuộn" : "";
+    pageToast(`✓ Đã ẩn ${hidden} rule${domains ? ` · chặn ${domains} domain` : ""}${unlocked}. Xem/xoá trong popup › Rule đã lưu.`);
   }
 
   /** kind: "busy" | "ok" | "err" | "" (thông tin). */
@@ -453,7 +500,7 @@
     try {
       if (act === "hide") {
         const domains = checkedDomains().map((d) => ({ ...d, reason: "Tự chọn" }));
-        await save([{ ...basic, scope: basicScope(), reason: "Tự chọn" }, ...domains].map((r) => forStorage(r, "manual")));
+        await save([withUnlock({ ...basic, scope: basicScope(), reason: "Tự chọn" }), ...domains].map((r) => forStorage(r, "manual")));
       } else if (act === "ai") {
         await runAI();
       } else if (act === "save") {
@@ -464,7 +511,7 @@
           : items;
         const domains = checkedDomains().map((d) => ({ ...d, reason: "Tự chọn" }));
         await save([
-          ...chosen.map((r) => forStorage(r.base ? { ...r, reason: "Tự chọn" } : r, r.base ? "manual" : "ai")),
+          ...chosen.map((r) => forStorage(r.base ? withUnlock({ ...r, reason: "Tự chọn" }) : r, r.base ? "manual" : "ai")),
           ...domains.map((r) => forStorage(r, "manual")),
         ]);
       }

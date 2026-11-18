@@ -31,6 +31,7 @@ AdsBlocker dùng 2 App ID (app + extension); Ksign ký bằng chứng chỉ nên
 | 1. Chặn mạng | ruleset `ads_custom` (`rules/ad_domains.json`), `ads` (EasyList + ABPVN), `tracking` (EasyPrivacy + `tools/lists/`) | ~46k domain quảng cáo, ~47k domain theo dõi, ping bên thứ ba, widget mạng xã hội; mạng popunder bị chặn cả khi mở thành tab mới |
 | | `content/content.js` + background `cosmetic` | Ẩn phần tử theo bộ lọc: selector theo tên miền ngay khi tải, selector chung chỉ cho id/class đang có trên trang |
 | 2. Popup & lớp phủ | `content/main_world.js` (JS của trang) | Bọc `window.open`, `a.click()`, `dispatchEvent(click)`: chỉ cho mở tab mới khi người dùng thật sự bấm vào nút/link và đích đến khớp link đó |
+| | `content/main_world.js` (Navigation API) | **Tab-under**: trong 3 giây sau khi trang mở tab mới (cùng một cú chạm), tab hiện tại chuyển sang site khác → huỷ (`navigate.preventDefault`), log `tabunder`, rồi đóng tab mới và mở URL của nó ngay tại tab hiện tại (giữ lịch sử Back). Tab không có handle (`target=_blank`, noopener) do background đóng (`tabUnder`: tab vừa tạo có `openerTabId` = tab này, hoặc cùng cửa sổ khi Safari không điền); chuyển hướng không do người dùng tới domain đã chặn tab mới cũng bị huỷ |
 | | `content/content.js` | Gỡ lớp phủ trong suốt bắt click (quét lúc tải trang 30 giây đầu, và ngay khi bị chạm), ẩn phần tử theo rule CSS |
 | 3. Quét bằng AI | `background.js` → `SafariWebExtensionHandler.swift` → Gemini | Snapshot các khối nghi là quảng cáo (HTML **đã bỏ chữ**) + ảnh chụp có đánh số + domain bên thứ ba + nhật ký popup → Gemini trả rule JSON → `rules/validate.js` lọc → người dùng duyệt |
 
@@ -106,6 +107,28 @@ Chỉ nhận rule `||domain^$tuỳ-chọn` (≈90% rule mạng; regex/đường 
 
 Rule tự chọn mang nhãn **Tự chọn** trong "Rule đã lưu", xoá là khối hiện lại.
 
+### Hộp thoại bắt tắt chặn quảng cáo (mở khoá cuộn)
+
+Trang hiện hộp thoại thường khoá cuộn (`overflow:hidden` trên html/body hoặc class kiểu `modal-open`, body `position:fixed;
+top:-Ypx`, `touch-action:none`, `preventDefault` trên `touchmove`/`wheel` ở document) và có lớp nền mờ riêng. Chỉ ẩn hộp
+thoại thì trang vẫn không cuộn được. Bật **mở khoá cuộn** theo trang:
+
+- Bảng chọn: ô **Mở khoá cuộn trang** tự tick khi khối chọn phủ ≥ 50% màn hình và được ghim (fixed), hoặc trang đang khoá cuộn;
+  rule lưu cờ `unlockScroll` (nhãn *Mở khoá cuộn* trong "Rule đã lưu", xoá rule là thôi mở khoá). Khối này được vượt giới hạn 30% diện tích.
+  Lúc lưu, bảng chọn tìm luôn **lớp nền mờ** (phần tử anh em của khối/tổ tiên: fixed, phủ ≥ 90% màn hình, không chữ/ảnh) và để
+  selector của nó đầu `fallback` → CSS ẩn ngay khi trang chèn vào; chỉ dò bằng JS thì lớp nền kịp hiện một khung hình (màn hình nháy tối mỗi lần tải).
+- Popup › **Mở khoá cuộn trang này** (`site.unlockScroll`): khi hộp thoại đã bị bộ lọc ẩn sẵn, không có rule riêng.
+- `content.js › unlockScroll`: style inline `!important` chỉ cho thuộc tính đang khoá (thắng cả class), body bị ghim → `static`
+  rồi cuộn về đúng chỗ; dò lớp nền mờ chưa có selector; chạy **ngay trong callback MutationObserver** (trước khi trình duyệt vẽ),
+  trang giành lại khoá liên tục thì sau 5 lần trong một task chuyển sang hẹn giờ 100ms (tránh treo).
+- `main_world.js`: bỏ qua `preventDefault()` của `touchmove`/`wheel` gắn ở window/document/html/body (phần tử con như carousel vẫn chặn được).
+
+### Nhật ký chặn → Chặn luôn
+
+Mục *Nhật ký chặn* trong popup: dòng **Popup**/**Tab-under** có nút **Chặn luôn &lt;domain&gt;** (`blockPopupDomain` → `global.popupDomains`):
+từ đó chặn tab mới + chuyển hướng tới domain này ở mọi trang (DNR `main_frame`/`sub_frame`). Không hiện cho domain của chính trang,
+CDN dùng chung, domain đã chặn. Quét AI cũng nhận log `tabunder` trong `popupLog`.
+
 ### Phạm vi rule và dùng chung giữa tên miền
 
 | Rule | Phạm vi | Lưu ở |
@@ -152,6 +175,7 @@ node tests/browser-smoke.mjs       # content script trên Chrome headless: overl
                                    # chế độ chọn (khung chứa, rộng/hẹp, Ẩn, structural, Ẩn bằng AI, Huỷ)
 node tests/youtube-smoke.mjs      # YouTube trên Chrome headless (CDP Fetch giả m.youtube.com): bỏ quảng cáo khỏi dữ liệu player, ẩn feed, tua/bỏ qua, công tắc
 node tests/popup-smoke.mjs [ảnh.png]  # popup với background giả: trạng thái đang xử lý / xong / lỗi của từng nút
+node tests/page-guard-smoke.mjs   # Chrome headless: chặn tab-under (click thật qua CDP Input), mở khoá cuộn sau khi ẩn hộp thoại
 ```
 
 Không có Safari trên Linux, nên smoke test chạy bằng Chrome với `browser.*` giả lập. Những gì riêng của Safari
@@ -168,7 +192,9 @@ Không có Safari trên Linux, nên smoke test chạy bằng Chrome với `brows
   trễ và có thể bị CSP của trang chặn.
 - Trang dùng thẻ `div` có `onclick` để mở tab mới (không phải nút/link thật) cũng bị chặn. Extension luôn chặn, không có
   công tắc riêng: cần thì tắt AdsBlocker cho trang đó bằng quyền theo từng trang web trong menu tiện ích của Safari.
-- Kiểu "tab-under" (trang hiện tại tự chuyển sang trang quảng cáo) chỉ bị chặn khi domain đó nằm trong danh sách chặn.
+- Tab-under chỉ chặn được khi Safari có Navigation API (`window.navigation`, chưa kiểm chứng trên iOS); không có thì chỉ còn
+  danh sách chặn domain. Trang chuyển tab cũ **trước** rồi mới mở tab mới, hoặc chuyển sau hơn 3 giây, thì không bắt được.
+  Trang thật bị chặn nhầm → ngoại lệ "Cho trang này mở tab mới" (tắt cả chặn tab-under trên trang).
 - Nếu Safari không cho chụp màn hình, Gemini chỉ dựa vào HTML nên kết quả kém hơn (popup sẽ báo "không có ảnh chụp").
 - Thống kê và kết quả quét theo tab lưu ở `storage.local` (khoá `tab:*`), dọn khi đóng tab và khi Safari khởi động lại.
   Không dùng `storage.session` vì Safari iOS báo vượt hạn mức dù dữ liệu chỉ vài KB.
